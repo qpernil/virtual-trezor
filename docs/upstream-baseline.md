@@ -62,5 +62,6 @@ official releases applies to the embedded firmware build in Trezor's pinned
 Linux build environment.
 
 The linked baseline intentionally contains SDL and UDP because it proves the
-official upstream target before replacement. The production worker build will
-exclude those objects entirely.
+official upstream target before replacement. The Raspberry Pi worker now
+retains SDL while excluding both upstream UDP implementations; its validation
+is recorded in [`raspberry-pi-validation.md`](raspberry-pi-validation.md).

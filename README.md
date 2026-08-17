@@ -15,14 +15,21 @@ simulated flash, display, buttons, and unprivileged endpoint I/O.
 
 ## Current status
 
-The first milestone is complete: the official Trezor One
-`legacy/v1.14.1` emulator builds from an unmodified, pinned upstream checkout
-and passes a startup smoke test on macOS arm64. The baseline is documented in
-[`docs/upstream-baseline.md`](docs/upstream-baseline.md).
+Two milestones now work:
 
-The Raspberry Pi worker port is not implemented yet. The first Pi milestone
-deliberately keeps the proven emulator UI and host support while changing only
-the transport boundary:
+- the official Trezor One `legacy/v1.14.1` emulator builds from an unmodified,
+  pinned upstream checkout and passes a startup smoke test on macOS arm64;
+- an aarch64 Raspberry Pi worker builds and runs that firmware behind the USB
+  gadget supervisor, replacing UDP with FunctionFS while retaining the SDL UI.
+
+The Pi was recognized by macOS as USB `1209:53c1`. The pinned Trezor host
+library opened it, read a model `1` firmware `1.14.1` `Features` response, and
+completed a 173-byte multi-packet ping. See
+[`docs/upstream-baseline.md`](docs/upstream-baseline.md) and
+[`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md).
+
+The current worker deliberately keeps the proven emulator UI and host support
+while changing only the transport boundary:
 
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
   the generic OLED framebuffer, SDL display/buttons, file-backed flash, timer,
@@ -32,9 +39,10 @@ the transport boundary:
   `platform/raspberry-pi`;
 - do not patch the upstream submodule.
 
-After the real-USB worker is accepted by `trezorctl` and Trezor Suite, a second
-milestone will replace SDL display/buttons with the physical OLED and GPIO
-drivers. This separates USB compatibility work from hardware UI work.
+Trezor Suite acceptance has not yet been tested. The FunctionFS descriptor set
+currently exposes only the main Trezor vendor interface; the separate U2F HID
+interface is also pending. After that compatibility work, the next platform
+milestone replaces SDL display/buttons with the physical OLED and GPIO drivers.
 
 See [`docs/architecture.md`](docs/architecture.md) and
 [`mk/worker-sources.mk`](mk/worker-sources.mk).
@@ -72,9 +80,9 @@ make init-baseline
 PROTOC_BIN=/path/to/protoc-33.5 make upstream-baseline
 ```
 
-The baseline target is diagnostic only. The initial `worker` target will keep
-SDL but will not compile or link either upstream UDP implementation. The later
-hardware-UI target will also remove SDL.
+The baseline target is diagnostic only. On Linux, `make worker` builds the
+FunctionFS worker. It keeps SDL but does not link either upstream UDP
+implementation. The later hardware-UI target will also remove SDL.
 
 ## Safety and identity
 

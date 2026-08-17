@@ -1,0 +1,28 @@
+schema = 1
+name = "virtual-trezor"
+
+[usb]
+vendor_id = 0x1209
+product_id = 0x53c1
+bcd_usb = 0x0210
+bcd_device = 0x0100
+max_speed = "full-speed"
+device_class = 0
+device_subclass = 0
+device_protocol = 0
+manufacturer = "SatoshiLabs"
+product = "TREZOR"
+serial = "virtual-trezor-one"
+max_power_ma = 100
+
+[worker]
+command = "/usr/local/libexec/virtual-trezor/virtual-trezor-worker"
+run_as = "per"
+readiness_timeout_ms = 30000
+state_directory = "/var/lib/virtual-trezor"
+runtime_directory = "/run/virtual-trezor"
+
+[[functions]]
+type = "functionfs"
+name = "trezor"
+mount = "/dev/ffs-virtual-trezor"
