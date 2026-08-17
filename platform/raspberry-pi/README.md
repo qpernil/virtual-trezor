@@ -43,13 +43,19 @@ asynchronous `RRGetOutputInfo` request to terminate an otherwise healthy
 worker. The fixed-size emulator window does not need XRandR.
 
 After the FunctionFS device works with `trezorctl` and Trezor Suite, the
-hardware-UI milestone adds:
+hardware-UI milestones add:
 
 | Replacement | Responsibility |
 | --- | --- |
-| `display.c` | `oledInit` and `oledRefresh`; send the framebuffer returned by upstream `oledGetBuffer` to a 128x64 OLED |
+| `display_i2c_sdl.c` | Transitional `oledInit`, `oledRefresh`, and `emulatorPoll`; retain SDL controls while also sending the framebuffer returned by upstream `oledGetBuffer` as SSD1306-compatible I2C traffic |
+| `display.c` | Final non-SDL `oledInit`, `oledRefresh`, and poll hook for the physical 128x64 OLED |
 | `buttons.c` | `buttonRead` using two GPIO inputs; upstream `buttonUpdate` retains debounce and event semantics |
 
 The supervisor may open I2C/GPIO character devices while privileged and pass
 their descriptors to the worker. All device-specific transactions and policy
 remain here in the unprivileged process.
+
+The original Trezor One OLED transport is SPI. The planned I2C backend is a Pi
+platform adaptation around the unchanged upstream framebuffer, not an attempt
+to reproduce the original board-level display wiring. See
+[`../../docs/i2c-display-plan.md`](../../docs/i2c-display-plan.md).

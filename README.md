@@ -44,9 +44,26 @@ on-device confirmation workflow; complete setup/recovery validation remains.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
 interface, so the separate U2F HID interface is also pending. After that
 compatibility work, the next platform milestone replaces SDL display/buttons
-with the physical OLED and GPIO drivers.
+with an I2C OLED backend and GPIO drivers. A real Trezor One uses SPI for its
+OLED; I2C is an intentional Raspberry Pi platform adaptation that retains the
+genuine upstream framebuffer and UI composition rather than reproducing the
+original electrical display bus.
 
-See [`docs/architecture.md`](docs/architecture.md) and
+The first I2C milestone will mirror the same framebuffer to SDL and to an
+SSD1306-compatible I2C stream, retaining the proven SDL controls. A second Pi
+can receive that real bus traffic through
+[`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
+reconstruct the display, and render it for validation before physical display
+hardware is attached. See
+[`docs/i2c-display-plan.md`](docs/i2c-display-plan.md).
+
+Each Pi exposes one USB device controller. Virtual YubiKey and Virtual Trezor
+profiles may both be installed, but only one profile can bind that controller
+at a time. Running both as independent USB devices requires two Pis or other
+independent device controllers.
+
+See [`docs/architecture.md`](docs/architecture.md),
+[`docs/i2c-display-plan.md`](docs/i2c-display-plan.md), and
 [`mk/worker-sources.mk`](mk/worker-sources.mk).
 
 ## Upstream source
