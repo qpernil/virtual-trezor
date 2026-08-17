@@ -7,21 +7,35 @@ declared I2C/GPIO resources, drops privileges, and launches this worker. The
 worker publishes its FunctionFS descriptors and owns all USB endpoint traffic.
 The supervisor does not interpret Trezor messages or proxy secret material.
 
+A Pi currently provides one usable USB device controller. The supervisor can
+therefore select a Virtual Trezor or Virtual YubiKey profile, but it cannot
+make them two independent USB devices simultaneously through that controller.
+Two concurrently enumerated device identities require two Pis or independent
+device controllers.
+
 ## Firmware boundary
 
 The Trezor One firmware already separates most UI composition from physical
 display refresh:
 
-- `legacy/oled.c` owns the 128x64 framebuffer and drawing primitives.
-- For an emulator build, upstream omits its STM32 `oledInit` and
-  `oledRefresh` implementations.
+- `legacy/oled.c` owns the 128x64, 1024-byte framebuffer and drawing
+  primitives.
+- A physical Trezor One uses the non-emulator `oledInit` and `oledRefresh`
+  implementations in that file to drive its OLED over STM32 SPI with separate
+  CS, data/command, and reset GPIOs.
+- For an emulator build, those SPI implementations are omitted by
+  `#if !EMULATOR`.
 - `legacy/emulator/oled.c` supplies those two functions with a desktop
   renderer.
 
 The first Pi port keeps `legacy/emulator/oled.c` and its SDL renderer. Once the
-real-USB path works with normal host software, the hardware-UI port will keep
-`legacy/oled.c` unchanged and replace only `oledInit` and `oledRefresh`. Its
-refresh implementation writes the existing framebuffer to the I2C display.
+real-USB path works with normal host software, the hardware-UI port keeps
+`legacy/oled.c` unchanged and replaces only the emulator platform symbols.
+The first transition mirrors the existing framebuffer to SDL and to an
+SSD1306-compatible I2C stream so the proven mouse/keyboard controls remain
+available. The final backend supplies `oledInit`, `oledRefresh`, and the
+required emulator poll hook without SDL. I2C is a Pi platform choice, not a
+claim that the original Trezor One display bus is I2C.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The current Pi port
@@ -55,8 +69,13 @@ upstream datagram implementation is present in the worker.
    USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
    interactive confirmation are proven. Full Suite workflows and the separate
    U2F HID interface remain.
-3. **Pending:** replace SDL display/buttons with the physical OLED and GPIO
-   implementation.
+3. **Pending:** mirror the genuine framebuffer to an SSD1306-compatible I2C
+   stream while retaining SDL display/buttons; validate the stream through a
+   second Pi target and an oscilloscope.
+4. **Pending:** replace SDL with the physical OLED and GPIO implementation.
+
+The detailed display stages and the Pi 4 controller-clock finding are in
+[`i2c-display-plan.md`](i2c-display-plan.md).
 
 ## Upstream policy
 

@@ -80,6 +80,15 @@ remained blocked in the kernel and the main firmware thread continued polling
 SDL. Clicking the right half of the SDL window produced the genuine upstream
 button press/release transition and completed the protected request.
 
+## Coexistence with other gadget profiles
+
+The Virtual Trezor worker and profile may remain installed beside Virtual
+YubiKey. They are selectable profiles, not simultaneous independent devices:
+only one supervisor instance can own the Pi's single UDC at a time. Switching
+profiles requires stopping the active gadget, allowing supervisor cleanup,
+and then starting the other profile. Two Pis can expose the two identities
+concurrently.
+
 ## Known limitations
 
 - Only the main vendor interface is published. The firmware advertises U2F,
@@ -87,7 +96,9 @@ button press/release transition and completed the protected request.
 - Full Trezor Suite device initialization and recovery/setup workflows still
   require interactive validation.
 - The current display and buttons use SDL/X11. Physical OLED-over-I2C and GPIO
-  button drivers are the next platform milestone.
+  button drivers are the next platform milestone. The real Trezor One OLED is
+  SPI; the planned I2C stream is a Raspberry Pi adaptation around the unchanged
+  upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
   but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB
   communication works; BOS/WebUSB descriptor parity still needs review.

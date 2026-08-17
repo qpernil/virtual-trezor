@@ -28,6 +28,9 @@ PI_INITIAL_PLATFORM_TO_PROVIDE := \
 	platform/raspberry-pi/usb_functionfs.c \
 	platform/raspberry-pi/buttons_sdl.c
 
+PI_I2C_MIRROR_TO_PROVIDE_NEXT := \
+	platform/raspberry-pi/display_i2c_sdl.c
+
 PI_HARDWARE_UI_TO_PROVIDE_LATER := \
 	platform/raspberry-pi/display.c \
 	platform/raspberry-pi/buttons.c
