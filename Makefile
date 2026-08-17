@@ -23,11 +23,11 @@ check-worker-boundary:
 	@grep -q 'legacy/emulator/udp.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/oled.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/buttons.c' mk/worker-sources.mk
+	@grep -q 'USB_GADGET_FUNCTIONFS_TREZOR' platform/raspberry-pi/usb_functionfs.c
 	@echo "Initial worker boundary excludes UDP and retains SDL UI support."
 
 upstream-baseline: check-upstream
 	./scripts/build-upstream-baseline.sh
 
 worker: check
-	@echo "The FunctionFS transport is the next milestone; no Pi worker is built yet."
-	@exit 2
+	./scripts/build-pi-worker.sh

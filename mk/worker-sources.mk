@@ -3,7 +3,9 @@
 # The build will enumerate upstream logic explicitly instead of invoking the
 # upstream EMULATOR target, because that target unconditionally selects UDP.
 # The initial worker retains SDL UI and the other host-emulator facilities.
-# This manifest is documentation until the Pi worker is implemented.
+# This manifest documents the implemented boundary. The actual build overlay is
+# mk/worker-firmware.mk because the upstream Makefile already enumerates the
+# complete firmware object set.
 
 UPSTREAM_LOGIC_TO_RETAIN := \
 	legacy/buttons.c \
@@ -24,8 +26,7 @@ UPSTREAM_EMULATOR_TO_RETAIN_INITIAL := \
 	legacy/emulator/timer.c
 
 PI_INITIAL_PLATFORM_TO_PROVIDE := \
-	platform/raspberry-pi/usb_functionfs.c \
-	platform/raspberry-pi/runtime.c
+	platform/raspberry-pi/usb_functionfs.c
 
 PI_HARDWARE_UI_TO_PROVIDE_LATER := \
 	platform/raspberry-pi/display.c \

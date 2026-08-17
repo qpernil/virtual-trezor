@@ -35,17 +35,26 @@ USB has two emulator-specific layers that must both be excluded:
 - `legacy/emulator/udp.c` implements the localhost datagram sockets beneath
   those calls.
 
-The first Pi port replaces the firmware-facing layer directly with FunctionFS
-endpoint I/O and adds the supervisor lifecycle connection. It does not
-reproduce the socket abstraction. Emulator flash, timer, randomness, SDL
+The current Pi port replaces the firmware-facing layer directly with
+FunctionFS endpoint I/O and adds the supervisor lifecycle connection. It does
+not reproduce the socket abstraction. Emulator flash, timer, randomness, SDL
 display, and SDL buttons remain in place for this milestone.
+
+`mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
+supplies one explicit rule for its expected `udp.o`. That object is compiled
+from `platform/raspberry-pi/usb_functionfs.c`. The derived emulator support
+archive has its own `udp.o` member removed before final linking, so neither
+upstream datagram implementation is present in the worker.
 
 ## Milestones
 
-1. Build and run the unmodified upstream SDL/UDP emulator as a baseline.
-2. Build the Pi worker with SDL UI and FunctionFS USB; validate it with
-   `trezorctl` and Trezor Suite.
-3. Replace SDL display/buttons with the physical OLED and GPIO implementation.
+1. **Complete:** build and run the unmodified upstream SDL/UDP emulator as a
+   baseline.
+2. **In progress:** build the Pi worker with SDL UI and FunctionFS USB. Real
+   USB enumeration, `Features`, and multi-packet protocol traffic are proven;
+   Trezor Suite and the separate U2F HID interface remain.
+3. **Pending:** replace SDL display/buttons with the physical OLED and GPIO
+   implementation.
 
 ## Upstream policy
 

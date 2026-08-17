@@ -1,6 +1,6 @@
 # Raspberry Pi platform boundary
 
-This directory will implement the host-facing functions required by the
+This directory implements the host-facing functions required by the
 unmodified Trezor One firmware logic.
 
 The initial worker must not compile either upstream datagram transport
@@ -11,8 +11,17 @@ The initial replacement surface is:
 
 | Replacement | Responsibility |
 | --- | --- |
-| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, and `usbFlush` using FunctionFS endpoints |
-| `runtime.c` | Supervisor control descriptor and resource-FD discovery |
+| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; FunctionFS descriptors/endpoints and supervisor lifecycle |
+
+`usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`. It
+publishes one vendor-specific main interface with 64-byte interrupt IN and OUT
+endpoints. DebugLink is disabled. The separate U2F HID interface is deferred
+until the main Trezor/Suite transport is validated.
+
+The implementation intentionally processes one FunctionFS OUT packet per poll
+cycle. FunctionFS endpoint reads can block when a second packet is not queued,
+even when the endpoint was opened with `O_NONBLOCK`; returning to the firmware
+loop after each packet ensures generated replies are flushed immediately.
 
 After the FunctionFS device works with `trezorctl` and Trezor Suite, the
 hardware-UI milestone adds:
