@@ -23,6 +23,16 @@ cycle. FunctionFS endpoint reads can block when a second packet is not queued,
 even when the endpoint was opened with `O_NONBLOCK`; returning to the firmware
 loop after each packet ensures generated replies are flushed immediately.
 
+FunctionFS interface state is tracked separately from the supervisor's UDC
+binding state. `ENABLE`, `DISABLE`, `RESUME`, and `UNBIND` events from `ep0`
+control whether data endpoints are polled. This lets host software close and
+reopen the USB interface without stranding the worker or causing a busy loop.
+
+The SDL/X11 setup disables SDL's optional XRandR integration. The Labwc
+Xwayland server can expose a stale output during display changes, causing SDL's
+asynchronous `RRGetOutputInfo` request to terminate an otherwise healthy
+worker. The fixed-size emulator window does not need XRandR.
+
 After the FunctionFS device works with `trezorctl` and Trezor Suite, the
 hardware-UI milestone adds:
 

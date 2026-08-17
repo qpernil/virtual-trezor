@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/usb/functionfs.h>
 #include <limits.h>
 #include <poll.h>
 #include <pwd.h>
@@ -41,17 +42,17 @@
 #define UGSP_STOPPED 0x83
 #define UGSP_FATAL 0x84
 
-#define FUNCTIONFS_DESCRIPTORS_MAGIC_V2 3U
-#define FUNCTIONFS_STRINGS_MAGIC 2U
-#define FUNCTIONFS_HAS_FS_DESC 1U
-#define FUNCTIONFS_HAS_HS_DESC 2U
-
 static int control_fd = -1;
 static int ep0_fd = -1;
 static int main_out_fd = -1;
 static int main_in_fd = -1;
-static bool usb_attached = false;
+static bool supervisor_attached = false;
+static bool functionfs_enabled = false;
 static volatile char tiny = 0;
+
+static bool usb_available(void) {
+  return supervisor_attached && functionfs_enabled;
+}
 
 static void die_errno(const char *operation) {
   fprintf(stderr, "virtual-trezor: %s: %s\n", operation, strerror(errno));
@@ -119,6 +120,10 @@ static void set_worker_environment(void) {
   (void)setenv("XDG_RUNTIME_DIR", runtime, 0);
   (void)setenv("DISPLAY", ":0", 0);
   (void)setenv("SDL_VIDEODRIVER", "x11", 0);
+  // Labwc's Xwayland can publish a stale RANDR output while displays change.
+  // SDL's asynchronous RRGetOutputInfo request then terminates the worker with
+  // BadRROutput. The emulator needs only one fixed-size window, not RANDR.
+  (void)setenv("SDL_VIDEO_X11_XRANDR", "0", 1);
   (void)setenv("TREZOR_OLED_SCALE", "2", 0);
   (void)setenv("TREZOR_OLED_FULLSCREEN", "0", 0);
 
@@ -251,10 +256,10 @@ static void handle_control_message(uint8_t kind) {
     case 0:
       return;
     case UGSP_USB_ATTACHED:
-      usb_attached = true;
+      supervisor_attached = true;
       return;
     case UGSP_USB_DETACHED:
-      usb_attached = false;
+      supervisor_attached = false;
       return;
     case UGSP_SHUTDOWN:
       stop_worker();
@@ -276,29 +281,49 @@ static int open_endpoint(const char *root, const char *name, int flags) {
 }
 
 static void drain_ep0(void) {
-  uint8_t events[12 * 8];
-  for (;;) {
-    ssize_t length = read(ep0_fd, events, sizeof(events));
-    if (length > 0) {
-      continue;
-    }
-    if (length < 0 && errno == EINTR) {
-      continue;
-    }
-    if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-      return;
-    }
-    if (length == 0 || (length < 0 && (errno == ENODEV || errno == ESHUTDOWN))) {
-      return;
-    }
-    if (length < 0) {
-      die_errno("read FunctionFS control endpoint");
+  struct usb_functionfs_event events[8];
+  ssize_t length;
+  do {
+    length = read(ep0_fd, events, sizeof(events));
+  } while (length < 0 && errno == EINTR);
+
+  if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    return;
+  }
+  if (length == 0 || (length < 0 && (errno == ENODEV || errno == ESHUTDOWN))) {
+    functionfs_enabled = false;
+    return;
+  }
+  if (length < 0) {
+    die_errno("read FunctionFS control endpoint");
+  }
+  if ((size_t)length % sizeof(events[0]) != 0) {
+    die_message("misaligned FunctionFS control event");
+  }
+
+  size_t count = (size_t)length / sizeof(events[0]);
+  for (size_t i = 0; i < count; i++) {
+    switch (events[i].type) {
+      case FUNCTIONFS_ENABLE:
+      case FUNCTIONFS_RESUME:
+        functionfs_enabled = true;
+        break;
+      case FUNCTIONFS_DISABLE:
+      case FUNCTIONFS_UNBIND:
+        functionfs_enabled = false;
+        break;
+      case FUNCTIONFS_BIND:
+      case FUNCTIONFS_SETUP:
+      case FUNCTIONFS_SUSPEND:
+        break;
+      default:
+        die_message("unknown FunctionFS control event");
     }
   }
 }
 
 static bool write_packet(const uint8_t *packet) {
-  while (usb_attached) {
+  while (usb_available()) {
     ssize_t length = write(main_in_fd, packet, USB_PACKET_SIZE);
     if (length == USB_PACKET_SIZE) {
       return true;
@@ -319,7 +344,7 @@ static bool write_packet(const uint8_t *packet) {
     }
     if (length < 0 &&
         (errno == ENODEV || errno == EPIPE || errno == ESHUTDOWN)) {
-      usb_attached = false;
+      functionfs_enabled = false;
       return false;
     }
     die_message("short or failed FunctionFS input transfer");
@@ -328,7 +353,7 @@ static bool write_packet(const uint8_t *packet) {
 }
 
 static void flush_messages(void) {
-  if (!usb_attached) {
+  if (!usb_available()) {
     return;
   }
   const uint8_t *data;
@@ -367,7 +392,7 @@ void usbInit(void) {
   if (receive_control(0) != UGSP_USB_ATTACHED) {
     die_message("supervisor did not send USB_ATTACHED");
   }
-  usb_attached = true;
+  supervisor_attached = true;
   fputs("virtual-trezor: FunctionFS main interface attached\n", stderr);
 }
 
@@ -376,7 +401,8 @@ void waitAndProcessUSBRequests(uint32_t millis) {
 
   struct pollfd fds[3] = {{.fd = control_fd, .events = POLLIN},
                           {.fd = ep0_fd, .events = POLLIN},
-                          {.fd = main_out_fd, .events = POLLIN}};
+                          {.fd = main_out_fd,
+                           .events = usb_available() ? POLLIN : 0}};
   int ready = poll(fds, 3, (int)millis);
   if (ready < 0 && errno != EINTR) {
     die_errno("poll FunctionFS endpoints");
@@ -389,7 +415,7 @@ void waitAndProcessUSBRequests(uint32_t millis) {
   }
 
   uint8_t buffer[USB_PACKET_SIZE];
-  if (usb_attached && ready > 0 && (fds[2].revents & POLLIN) != 0) {
+  if (usb_available() && ready > 0 && (fds[2].revents & POLLIN) != 0) {
     ssize_t length;
     do {
       length = read(main_out_fd, buffer, sizeof(buffer));
@@ -404,7 +430,7 @@ void waitAndProcessUSBRequests(uint32_t millis) {
     } else if (length == 0 ||
                (length < 0 &&
                 (errno == ENODEV || errno == EPIPE || errno == ESHUTDOWN))) {
-      usb_attached = false;
+      functionfs_enabled = false;
     } else if (length < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
       die_errno("read FunctionFS OUT endpoint");
     } else if (length > 0) {
