@@ -32,17 +32,19 @@ The current worker deliberately keeps the proven emulator UI and host support
 while changing only the transport boundary:
 
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
-  the generic OLED framebuffer, SDL display/buttons, file-backed flash, timer,
-  and randomness;
+  the generic OLED framebuffer, SDL display, file-backed flash, timer, and
+  randomness;
 - exclude both UDP source files;
-- supply FunctionFS USB and supervisor-control implementations from
-  `platform/raspberry-pi`;
+- supply FunctionFS USB, supervisor-control, and practical SDL keyboard/mouse
+  button implementations from `platform/raspberry-pi`;
 - do not patch the upstream submodule.
 
-Trezor Suite acceptance has not yet been tested. The FunctionFS descriptor set
-currently exposes only the main Trezor vendor interface; the separate U2F HID
-interface is also pending. After that compatibility work, the next platform
-milestone replaces SDL display/buttons with the physical OLED and GPIO drivers.
+Trezor Suite recognizes the worker and reaches its firmware-check and
+on-device confirmation workflow; complete setup/recovery validation remains.
+The FunctionFS descriptor set currently exposes only the main Trezor vendor
+interface, so the separate U2F HID interface is also pending. After that
+compatibility work, the next platform milestone replaces SDL display/buttons
+with the physical OLED and GPIO drivers.
 
 See [`docs/architecture.md`](docs/architecture.md) and
 [`mk/worker-sources.mk`](mk/worker-sources.mk).

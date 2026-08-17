@@ -9,6 +9,16 @@ PROJECT_ROOT := $(abspath $(dir $(WORKER_OVERLAY))/..)
 
 include Makefile
 
+CFLAGS += -pthread
+LDFLAGS += -pthread
+OBJS += platform_buttons.o
+
+$(NAME).elf: platform_buttons.o
+
 udp.o: $(PROJECT_ROOT)/platform/raspberry-pi/usb_functionfs.c
 	@printf "  CC      %s (FunctionFS replacement)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -I. -MMD -MP -o $@ -c $<
+
+platform_buttons.o: $(PROJECT_ROOT)/platform/raspberry-pi/buttons_sdl.c
+	@printf "  CC      %s (SDL buttons replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -MMD -MP -o $@ -c $<

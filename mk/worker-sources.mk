@@ -20,13 +20,13 @@ UPSTREAM_PLATFORM_TO_EXCLUDE := \
 
 UPSTREAM_EMULATOR_TO_RETAIN_INITIAL := \
 	legacy/emulator/oled.c \
-	legacy/emulator/buttons.c \
 	legacy/emulator/setup.c \
 	legacy/emulator/memory.c \
 	legacy/emulator/timer.c
 
 PI_INITIAL_PLATFORM_TO_PROVIDE := \
-	platform/raspberry-pi/usb_functionfs.c
+	platform/raspberry-pi/usb_functionfs.c \
+	platform/raspberry-pi/buttons_sdl.c
 
 PI_HARDWARE_UI_TO_PROVIDE_LATER := \
 	platform/raspberry-pi/display.c \

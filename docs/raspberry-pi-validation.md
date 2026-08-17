@@ -8,7 +8,7 @@
 | Host | Raspberry Pi, aarch64 |
 | OS | Debian GNU/Linux 13 (trixie) |
 | Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Worker SHA-256 | `7d376ee181657a52296af88d5d6cf11cb100e049d9d6095e022302da20082a0e` |
+| Worker SHA-256 | `1f99db42f49b452b1d32fb469c7fffa419b85a5b2c944002a9afdf57b6b9ac0b` |
 | Supervisor service | `usb-gadget-supervisor@virtual-trezor.service` |
 | USB device controller | `fe980000.usb`, state `configured` |
 | FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
@@ -73,6 +73,12 @@ worker logically detached.
 Trezor Suite recognizes the gadget and reaches its firmware check and
 on-device confirmation workflow. It correctly warns that the firmware check
 does not authenticate this Linux worker as an official signed embedded image.
+
+A protected ping was used to verify interactive behavior. While the host
+waited on a `ProtectCall` button request, a dedicated FunctionFS reader thread
+remained blocked in the kernel and the main firmware thread continued polling
+SDL. Clicking the right half of the SDL window produced the genuine upstream
+button press/release transition and completed the protected request.
 
 ## Known limitations
 
