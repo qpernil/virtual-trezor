@@ -8,7 +8,7 @@
 | Host | Raspberry Pi, aarch64 |
 | OS | Debian GNU/Linux 13 (trixie) |
 | Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Worker SHA-256 | `3d7406c2a638af027729ef4b2bc1e2d41f06eb843525ad96bdb49d693eacf0fe` |
+| Worker SHA-256 | `7d376ee181657a52296af88d5d6cf11cb100e049d9d6095e022302da20082a0e` |
 | Supervisor service | `usb-gadget-supervisor@virtual-trezor.service` |
 | USB device controller | `fe980000.usb`, state `configured` |
 | FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
@@ -63,11 +63,23 @@ A no-protection ping with a 173-byte message returned the identical payload.
 That exercises both OUT and IN traffic across multiple 64-byte FunctionFS
 interrupt transfers, not merely descriptor enumeration.
 
+The deployed adapter was subsequently tested against the host lifecycle used
+by Trezor Suite. A challenged `GetFirmwareHash` returned 32 bytes in 0.246
+seconds; the host then closed the FunctionFS interface, reopened it, and
+completed a new ping without restarting the service. The adapter consumes
+FunctionFS `ENABLE`/`DISABLE` events so a host interface reset cannot leave the
+worker logically detached.
+
+Trezor Suite recognizes the gadget and reaches its firmware check and
+on-device confirmation workflow. It correctly warns that the firmware check
+does not authenticate this Linux worker as an official signed embedded image.
+
 ## Known limitations
 
 - Only the main vendor interface is published. The firmware advertises U2F,
   but the separate U2F HID interface is not yet exposed.
-- Trezor Suite acceptance has not yet been tested.
+- Full Trezor Suite device initialization and recovery/setup workflows still
+  require interactive validation.
 - The current display and buttons use SDL/X11. Physical OLED-over-I2C and GPIO
   button drivers are the next platform milestone.
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
