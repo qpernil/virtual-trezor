@@ -1,0 +1,3 @@
+[submodule "upstream/trezor-firmware"]
+	path = upstream/trezor-firmware
+	url = https://github.com/trezor/trezor-firmware.git
