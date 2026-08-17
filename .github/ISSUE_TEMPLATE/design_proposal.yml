@@ -1,0 +1,39 @@
+name: Design proposal
+description: Propose an upstream-boundary, USB, storage, display, or button change
+title: "design: "
+labels:
+  - design
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or use case should this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed design
+      description: Describe source boundaries, process ownership, interfaces, and lifecycle.
+    validations:
+      required: true
+  - type: textarea
+    id: fidelity
+    attributes:
+      label: Fidelity and security impact
+      description: Explain effects on unmodified upstream code, USB identity, UI fidelity, secrets, and privilege separation.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Describe automated, host-software, Raspberry Pi, display, GPIO, or oscilloscope checks.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you evaluate?

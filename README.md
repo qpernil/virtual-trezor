@@ -1,5 +1,8 @@
 # Virtual Trezor
 
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#current-status)
+
 `virtual-trezor` runs the upstream Trezor One firmware logic as an
 unprivileged Raspberry Pi USB-gadget worker. The intended device uses the Pi's
 real USB device controller, a physical 128x64 OLED, and two GPIO buttons. It is
@@ -12,6 +15,29 @@ The worker is designed to run under
 The supervisor owns ConfigFS, FunctionFS setup, UDC binding, privilege drop,
 and lifecycle control. This repository owns the Trezor protocol, persistent
 simulated flash, display, buttons, and unprivileged endpoint I/O.
+
+## Quick start
+
+Clone the integration repository without recursively initializing every
+dependency in the upstream monorepo, then let the project select only the
+submodules required by Trezor One:
+
+```sh
+git clone https://github.com/qpernil/virtual-trezor.git
+cd virtual-trezor
+make init
+make check
+```
+
+The FunctionFS worker must be built on Linux with SDL2, SDL2_image, `uv`, and
+the exact protobuf compiler required by the pinned firmware release:
+
+```sh
+PROTOC_BIN=/path/to/protoc-33.5 make worker
+```
+
+See [`docs/deployment.md`](docs/deployment.md) for Raspberry Pi prerequisites,
+installation, profile customization, and USB gadget startup.
 
 ## Current status
 
@@ -103,6 +129,15 @@ The baseline target is diagnostic only. On Linux, `make worker` builds the
 FunctionFS worker. It keeps SDL but does not link either upstream UDP
 implementation. The later hardware-UI target will also remove SDL.
 
+## Documentation
+
+- [Architecture and platform boundaries](docs/architecture.md)
+- [Upstream baseline](docs/upstream-baseline.md)
+- [Raspberry Pi FunctionFS validation](docs/raspberry-pi-validation.md)
+- [I2C display and oscilloscope plan](docs/i2c-display-plan.md)
+- [Raspberry Pi deployment](docs/deployment.md)
+- [Raspberry Pi platform implementation](platform/raspberry-pi/README.md)
+
 ## Safety and identity
 
 Never use this software to protect real funds, recovery seeds, passphrases, or
@@ -112,6 +147,14 @@ hardware security.
 Trezor names, protocol identifiers, and USB identifiers are used only for
 controlled compatibility testing. This project is not affiliated with or
 endorsed by Trezor Company.
+
+## Contributing
+
+The project is experimental, and hardware reports, USB compatibility results,
+and focused code or documentation improvements are welcome. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Report
+security-sensitive findings according to [`SECURITY.md`](SECURITY.md), not in
+a public issue.
 
 ## License
 
