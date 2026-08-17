@@ -23,10 +23,11 @@ real-USB path works with normal host software, the hardware-UI port will keep
 `legacy/oled.c` unchanged and replace only `oledInit` and `oledRefresh`. Its
 refresh implementation writes the existing framebuffer to the I2C display.
 
-Buttons have the same useful split. The first port keeps the upstream SDL
-button implementation. The hardware-UI port later keeps `legacy/buttons.c`,
-which owns `buttonUpdate` and state transitions, while supplying only
-`buttonRead` from GPIO.
+Buttons have the same useful split. `legacy/buttons.c` continues to own
+`buttonUpdate` and the real debounce/state transitions. The current Pi port
+supplies only `buttonRead` through an SDL adapter: arrows remain available,
+while clicking the left or right half of the display acts as No or Yes. The
+hardware-UI port later replaces that adapter with a GPIO `buttonRead`.
 
 USB has two emulator-specific layers that must both be excluded:
 
@@ -37,8 +38,8 @@ USB has two emulator-specific layers that must both be excluded:
 
 The current Pi port replaces the firmware-facing layer directly with
 FunctionFS endpoint I/O and adds the supervisor lifecycle connection. It does
-not reproduce the socket abstraction. Emulator flash, timer, randomness, SDL
-display, and SDL buttons remain in place for this milestone.
+not reproduce the socket abstraction. Emulator flash, timer, randomness, and
+SDL display remain in place for this milestone.
 
 `mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
 supplies one explicit rule for its expected `udp.o`. That object is compiled
@@ -51,8 +52,9 @@ upstream datagram implementation is present in the worker.
 1. **Complete:** build and run the unmodified upstream SDL/UDP emulator as a
    baseline.
 2. **In progress:** build the Pi worker with SDL UI and FunctionFS USB. Real
-   USB enumeration, `Features`, and multi-packet protocol traffic are proven;
-   Trezor Suite and the separate U2F HID interface remain.
+   USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
+   interactive confirmation are proven. Full Suite workflows and the separate
+   U2F HID interface remain.
 3. **Pending:** replace SDL display/buttons with the physical OLED and GPIO
    implementation.
 

@@ -13,6 +13,7 @@
 #include <linux/usb/functionfs.h>
 #include <limits.h>
 #include <poll.h>
+#include <pthread.h>
 #include <pwd.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/eventfd.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -42,16 +44,49 @@
 #define UGSP_STOPPED 0x83
 #define UGSP_FATAL 0x84
 
+#define OUT_QUEUE_CAPACITY 64
+
 static int control_fd = -1;
 static int ep0_fd = -1;
 static int main_out_fd = -1;
 static int main_in_fd = -1;
+static int packet_event_fd = -1;
 static bool supervisor_attached = false;
 static bool functionfs_enabled = false;
 static volatile char tiny = 0;
 
+static pthread_mutex_t endpoint_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t endpoint_enabled = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t queue_space = PTHREAD_COND_INITIALIZER;
+static uint8_t out_queue[OUT_QUEUE_CAPACITY][USB_PACKET_SIZE];
+static size_t out_queue_start = 0;
+static size_t out_queue_count = 0;
+
+static void die_errno(const char *operation);
+
 static bool usb_available(void) {
   return supervisor_attached && functionfs_enabled;
+}
+
+static void set_functionfs_enabled(bool enabled) {
+  int result = pthread_mutex_lock(&endpoint_mutex);
+  if (result != 0) {
+    errno = result;
+    die_errno("lock FunctionFS endpoint state");
+  }
+  functionfs_enabled = enabled;
+  if (enabled) {
+    result = pthread_cond_broadcast(&endpoint_enabled);
+  }
+  int unlock_result = pthread_mutex_unlock(&endpoint_mutex);
+  if (result == 0) {
+    result = unlock_result;
+  }
+  if (result != 0) {
+    errno = result;
+    die_errno("update FunctionFS endpoint state");
+  }
 }
 
 static void die_errno(const char *operation) {
@@ -291,7 +326,7 @@ static void drain_ep0(void) {
     return;
   }
   if (length == 0 || (length < 0 && (errno == ENODEV || errno == ESHUTDOWN))) {
-    functionfs_enabled = false;
+    set_functionfs_enabled(false);
     return;
   }
   if (length < 0) {
@@ -306,11 +341,11 @@ static void drain_ep0(void) {
     switch (events[i].type) {
       case FUNCTIONFS_ENABLE:
       case FUNCTIONFS_RESUME:
-        functionfs_enabled = true;
+        set_functionfs_enabled(true);
         break;
       case FUNCTIONFS_DISABLE:
       case FUNCTIONFS_UNBIND:
-        functionfs_enabled = false;
+        set_functionfs_enabled(false);
         break;
       case FUNCTIONFS_BIND:
       case FUNCTIONFS_SETUP:
@@ -318,6 +353,115 @@ static void drain_ep0(void) {
         break;
       default:
         die_message("unknown FunctionFS control event");
+    }
+  }
+}
+
+static void wait_for_enabled_endpoint(void) {
+  int result = pthread_mutex_lock(&endpoint_mutex);
+  if (result == 0) {
+    while (!functionfs_enabled && result == 0) {
+      result = pthread_cond_wait(&endpoint_enabled, &endpoint_mutex);
+    }
+    int unlock_result = pthread_mutex_unlock(&endpoint_mutex);
+    if (result == 0) {
+      result = unlock_result;
+    }
+  }
+  if (result != 0) {
+    errno = result;
+    die_errno("wait for FunctionFS endpoint enable");
+  }
+}
+
+static void enqueue_out_packet(const uint8_t *packet) {
+  int result = pthread_mutex_lock(&queue_mutex);
+  while (result == 0 && out_queue_count == OUT_QUEUE_CAPACITY) {
+    result = pthread_cond_wait(&queue_space, &queue_mutex);
+  }
+  if (result == 0) {
+    size_t position = (out_queue_start + out_queue_count) % OUT_QUEUE_CAPACITY;
+    memcpy(out_queue[position], packet, USB_PACKET_SIZE);
+    out_queue_count++;
+  }
+  int unlock_result = pthread_mutex_unlock(&queue_mutex);
+  if (result == 0) {
+    result = unlock_result;
+  }
+  if (result != 0) {
+    errno = result;
+    die_errno("queue FunctionFS OUT packet");
+  }
+
+  uint64_t notification = 1;
+  ssize_t length = write(packet_event_fd, &notification, sizeof(notification));
+  if (length < 0 && errno == EAGAIN) {
+    return;
+  }
+  if (length != (ssize_t)sizeof(notification)) {
+    die_errno("signal FunctionFS OUT packet");
+  }
+}
+
+static void *out_reader(void *unused) {
+  (void)unused;
+  uint8_t packet[USB_PACKET_SIZE];
+  for (;;) {
+    wait_for_enabled_endpoint();
+    ssize_t length = read(main_out_fd, packet, sizeof(packet));
+    if (length == USB_PACKET_SIZE) {
+      enqueue_out_packet(packet);
+    } else if (length < 0 && errno == EINTR) {
+      continue;
+    } else if (length < 0 &&
+               (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENODEV ||
+                errno == EPIPE || errno == ESHUTDOWN)) {
+      usleep(1000);
+    } else if (length == 0) {
+      usleep(1000);
+    } else if (length > 0) {
+      fprintf(stderr,
+              "virtual-trezor: ignored FunctionFS OUT packet length %zd\n",
+              length);
+    } else {
+      die_errno("read FunctionFS OUT endpoint");
+    }
+  }
+  return NULL;
+}
+
+static bool dequeue_out_packet(uint8_t *packet) {
+  int result = pthread_mutex_lock(&queue_mutex);
+  bool available = result == 0 && out_queue_count > 0;
+  if (available) {
+    memcpy(packet, out_queue[out_queue_start], USB_PACKET_SIZE);
+    out_queue_start = (out_queue_start + 1) % OUT_QUEUE_CAPACITY;
+    out_queue_count--;
+    result = pthread_cond_signal(&queue_space);
+  }
+  int unlock_result = pthread_mutex_unlock(&queue_mutex);
+  if (result == 0) {
+    result = unlock_result;
+  }
+  if (result != 0) {
+    errno = result;
+    die_errno("dequeue FunctionFS OUT packet");
+  }
+  return available;
+}
+
+static void process_out_packets(void) {
+  uint64_t notifications;
+  while (read(packet_event_fd, &notifications, sizeof(notifications)) < 0 &&
+         errno == EINTR) {
+  }
+
+  uint8_t packet[USB_PACKET_SIZE];
+  while (dequeue_out_packet(packet)) {
+    if (!tiny) {
+      msg_read_common('n', packet, sizeof(packet));
+    } else {
+      msg_read_tiny(packet, sizeof(packet));
     }
   }
 }
@@ -344,7 +488,7 @@ static bool write_packet(const uint8_t *packet) {
     }
     if (length < 0 &&
         (errno == ENODEV || errno == EPIPE || errno == ESHUTDOWN)) {
-      functionfs_enabled = false;
+      set_functionfs_enabled(false);
       return false;
     }
     die_message("short or failed FunctionFS input transfer");
@@ -387,6 +531,21 @@ void usbInit(void) {
 
   main_out_fd = open_endpoint(functionfs, "ep1", O_RDONLY);
   main_in_fd = open_endpoint(functionfs, "ep2", O_WRONLY);
+  packet_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  if (packet_event_fd < 0) {
+    die_errno("create FunctionFS packet event");
+  }
+  pthread_t reader;
+  int thread_result = pthread_create(&reader, NULL, out_reader, NULL);
+  if (thread_result != 0) {
+    errno = thread_result;
+    die_errno("create FunctionFS OUT reader");
+  }
+  thread_result = pthread_detach(reader);
+  if (thread_result != 0) {
+    errno = thread_result;
+    die_errno("detach FunctionFS OUT reader");
+  }
 
   send_control(UGSP_FUNCTIONFS_READY);
   if (receive_control(0) != UGSP_USB_ATTACHED) {
@@ -401,8 +560,7 @@ void waitAndProcessUSBRequests(uint32_t millis) {
 
   struct pollfd fds[3] = {{.fd = control_fd, .events = POLLIN},
                           {.fd = ep0_fd, .events = POLLIN},
-                          {.fd = main_out_fd,
-                           .events = usb_available() ? POLLIN : 0}};
+                          {.fd = packet_event_fd, .events = POLLIN}};
   int ready = poll(fds, 3, (int)millis);
   if (ready < 0 && errno != EINTR) {
     die_errno("poll FunctionFS endpoints");
@@ -414,30 +572,8 @@ void waitAndProcessUSBRequests(uint32_t millis) {
     drain_ep0();
   }
 
-  uint8_t buffer[USB_PACKET_SIZE];
-  if (usb_available() && ready > 0 && (fds[2].revents & POLLIN) != 0) {
-    ssize_t length;
-    do {
-      length = read(main_out_fd, buffer, sizeof(buffer));
-    } while (length < 0 && errno == EINTR);
-
-    if (length == USB_PACKET_SIZE) {
-      if (!tiny) {
-        msg_read_common('n', buffer, sizeof(buffer));
-      } else {
-        msg_read_tiny(buffer, sizeof(buffer));
-      }
-    } else if (length == 0 ||
-               (length < 0 &&
-                (errno == ENODEV || errno == EPIPE || errno == ESHUTDOWN))) {
-      functionfs_enabled = false;
-    } else if (length < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-      die_errno("read FunctionFS OUT endpoint");
-    } else if (length > 0) {
-      fprintf(stderr,
-              "virtual-trezor: ignored FunctionFS OUT packet length %zd\n",
-              length);
-    }
+  if (ready > 0 && (fds[2].revents & POLLIN) != 0) {
+    process_out_packets();
   }
   flush_messages();
 }

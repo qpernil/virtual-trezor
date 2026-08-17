@@ -48,9 +48,9 @@ make -C "$LEGACY_DIR" clean
 make -C "$LEGACY_DIR/emulator" clean
 
 make -C "$LEGACY_DIR/emulator"
-# The upstream emulator archive supplies SDL, flash, timer, and buttons. Its
-# UDP member is generated but intentionally removed from this derived archive.
-ar d "$LEGACY_DIR/emulator/libemulator.a" udp.o
+# The upstream emulator archive supplies SDL, flash, and timer. Its UDP and
+# keyboard-only button members are replaced by project platform objects.
+ar d "$LEGACY_DIR/emulator/libemulator.a" udp.o buttons.o
 
 make -C "$LEGACY_DIR"
 make -C "$LEGACY_DIR/firmware/protob"
