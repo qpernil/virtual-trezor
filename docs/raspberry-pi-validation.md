@@ -4,11 +4,11 @@
 
 | Item | Value |
 | --- | --- |
-| Date | 2026-08-18 |
+| Date | 2026-08-19 |
 | Host | Raspberry Pi, aarch64 |
 | OS | Debian GNU/Linux 13 (trixie) |
 | Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Worker SHA-256 | `c2862d104a1cb79de4c69c9c0f1d990e0df5e49f5ee2707114ad1d5974e8f3c2` |
+| Worker SHA-256 | `dc6de5e4823d65616a5cb8601908a0d31eb4ed4f772d2203cba19e976381cf29` |
 | Supervisor service | `usb-gadget-supervisor@virtual-trezor.service` |
 | USB device controller | `fe980000.usb`, state `configured` |
 | FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
@@ -17,7 +17,8 @@ The root supervisor created ConfigFS and FunctionFS resources, bound the USB
 device controller, and launched the firmware worker as the unprivileged user
 `per`. The worker inherited the supervisor control socket and FunctionFS mount,
 published its descriptors, and opened the endpoint files itself. The current
-worker drives I2C and GPIO through additional supervisor-opened descriptors.
+worker drives I2C or SPI and GPIO through additional supervisor-opened
+descriptors.
 
 ## Build
 
@@ -32,8 +33,8 @@ The build used the upstream legacy firmware Makefile for the real firmware
 object list. `mk/worker-firmware.mk` supplies project objects for the
 firmware's expected USB, display, and button symbols. The emulator support
 archive is constructed only from setup, memory, timer, and string compatibility
-objects. The final worker contains FunctionFS/I2C/GPIO platform symbols and
-neither upstream `emulatorSocket` implementation nor SDL.
+objects. The final worker contains FunctionFS/I2C/SPI/GPIO platform symbols
+and neither upstream `emulatorSocket` implementation nor SDL.
 
 The clean Git-backed ARM64 build linked only `libc.so.6`. `ldd`, ELF `NEEDED`
 entries, and a binary-string audit found no SDL, SDL_image, X11, Xwayland, or
@@ -121,6 +122,10 @@ concurrently.
   The real Trezor One OLED
   is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
   upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
+- The SH1106 SPI profile and ARM64 worker build are deployed. A no-HAT smoke
+  test opened supervisor-inherited `/dev/spidev0.0`, configured mode 0 at
+  4 MHz, drove GPIO24 Data/Command and GPIO25 reset, and attached FunctionFS.
+  Pixel and button validation against the physical HAT remains pending.
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
   but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB
   communication works; BOS/WebUSB descriptor parity still needs review.

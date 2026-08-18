@@ -80,7 +80,8 @@ in the worker.
    electrical, second-Pi rendering, interactive-button, and 400 kHz
    oscilloscope validation pass.
 4. **In progress:** the same SH1106 stream has a factory-HAT SPI transport;
-   build validation precedes physical OLED/button-HAT validation.
+   its ARM64 build, supervisor resource handoff, spidev configuration, GPIO,
+   and USB startup pass. Physical OLED/button-HAT validation remains.
 
 The detailed display stages and the Pi 4 controller-clock finding are in
 [`i2c-display-plan.md`](i2c-display-plan.md).
