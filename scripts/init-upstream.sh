@@ -9,8 +9,8 @@ git -C "$PROJECT_ROOT" submodule update --init upstream/trezor-firmware
 git -C "$UPSTREAM_DIR" submodule update --init \
   vendor/nanopb \
   vendor/QR-Code-generator \
+  vendor/libopencm3 \
   vendor/secp256k1-zkp \
   vendor/ts-tvl
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
-

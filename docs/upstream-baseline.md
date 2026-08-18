@@ -18,21 +18,20 @@ files are ignored within the upstream checkout.
 
 ## Minimal observed dependencies
 
-The emulator baseline compiled code from these pinned nested repositories:
+The emulator baseline and Pi worker compile code or headers from these pinned
+nested repositories:
 
 - `vendor/nanopb`
 - `vendor/QR-Code-generator`
+- `vendor/libopencm3`, because retained emulator `setup.c` includes an STM32
+  flash header even though the worker does not link libopencm3
 - `vendor/secp256k1-zkp`
+- `vendor/ts-tvl`, because the monorepo's locked `uv` project declares it as an
+  editable Python dependency even though it is not linked into Trezor One
 
-It also required:
-
-- `vendor/libopencm3`, because upstream emulator `setup.c` includes an STM32
-  flash header even though the emulator does not link libopencm3;
-- `vendor/ts-tvl`, because the monorepo's locked `uv` project declares it
-  as an editable Python dependency even though it is not linked into Trezor
-  One;
-- SDL2 and SDL2_image for the unmodified emulator display/buttons;
-- `protoc` 33.5, matching the locked Python protobuf 6.33.5 runtime.
+Both builds require `protoc` 33.5, matching the locked Python protobuf 6.33.5
+runtime. The baseline additionally requires SDL2 and SDL2_image for the
+unmodified emulator display/buttons.
 
 No other nested submodule was initialized.
 
