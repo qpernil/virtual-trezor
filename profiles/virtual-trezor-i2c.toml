@@ -1,5 +1,5 @@
 schema = 1
-name = "virtual-trezor-spi"
+name = "virtual-trezor-i2c"
 
 [usb]
 vendor_id = 0x1209
@@ -17,15 +17,15 @@ max_power_ma = 100
 
 [worker]
 command = "/home/per/virtual-trezor/build/virtual-trezor-worker"
-arguments = ["--display=sh1106-spi"]
+arguments = ["--display=sh1106-i2c"]
 run_as = "per"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor"
 runtime_directory = "/run/virtual-trezor"
 
 [[resources]]
-name = "display-spi"
-path = "/dev/spidev0.0"
+name = "display-i2c"
+path = "/dev/i2c-1"
 access = "read-write"
 optional = false
 

@@ -76,9 +76,10 @@ transport style, while I2C remains an intentional Raspberry Pi adaptation for
 the virtual display and future I2C-native modules. Both retain the genuine
 upstream framebuffer and UI composition.
 
-The checked-in I2C profile declares `/dev/i2c-1` and `/dev/gpiochip0`; the SPI
-profile instead declares `/dev/spidev0.0` and `/dev/gpiochip0`. The worker's
-`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option selects the backend.
+The default checked-in profile declares `/dev/spidev0.0` and
+`/dev/gpiochip0`; the explicitly named I2C profile instead declares
+`/dev/i2c-1` and `/dev/gpiochip0`. With no argument the worker selects SH1106
+SPI. The `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option overrides it.
 SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.
 The two active-low firmware buttons are read on GPIO5 and GPIO26. Both I2C
 display streams have been validated at 400 kHz against the Pi 3 target driver.

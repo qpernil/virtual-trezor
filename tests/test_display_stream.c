@@ -72,9 +72,10 @@ int main(void) {
   char error[160];
   char *default_arguments[] = {"virtual-trezor-worker"};
   assert(worker_config_parse(1, default_arguments, error, sizeof(error)));
-  assert(worker_display_backend() == DISPLAY_SSD1306_I2C);
-  assert(!worker_display_is_sh1106());
-  assert(!worker_display_uses_spi());
+  assert(worker_display_backend() == DISPLAY_SH1106_SPI);
+  assert(worker_display_is_sh1106());
+  assert(worker_display_uses_spi());
+  assert(strcmp(worker_display_backend_name(), "sh1106-spi") == 0);
 
   char *sh1106_arguments[] = {"virtual-trezor-worker",
                               "--display=sh1106-i2c"};
