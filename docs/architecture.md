@@ -28,14 +28,13 @@ display refresh:
 - `legacy/emulator/oled.c` supplies those two functions with a desktop
   renderer.
 
-The first Pi port keeps `legacy/emulator/oled.c` and its SDL renderer. Once the
-real-USB path works with normal host software, the hardware-UI port keeps
-`legacy/oled.c` unchanged and replaces only the emulator platform symbols.
-The first transition mirrors the existing framebuffer to SDL and to an
-SSD1306-compatible I2C stream so the proven mouse/keyboard controls remain
-available. The final backend supplies `oledInit`, `oledRefresh`, and the
-required emulator poll hook without SDL. I2C is a Pi platform choice, not a
-claim that the original Trezor One display bus is I2C.
+The first Pi port retains the unmodified `legacy/emulator/oled.c` SDL renderer,
+but compiles its three entry points under private `sdl*` names. The project
+wrapper supplies the public `oledInit`, `oledRefresh`, and `emulatorPoll`
+symbols. It calls SDL and optionally mirrors the existing framebuffer to an
+SSD1306-compatible I2C stream, so the proven mouse/keyboard controls remain
+available. The final backend can replace that wrapper without SDL. I2C is a Pi
+platform choice, not a claim that the original Trezor One display bus is I2C.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The current Pi port
@@ -56,10 +55,12 @@ not reproduce the socket abstraction. Emulator flash, timer, randomness, and
 SDL display remain in place for this milestone.
 
 `mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
-supplies one explicit rule for its expected `udp.o`. That object is compiled
-from `platform/raspberry-pi/usb_functionfs.c`. The derived emulator support
-archive has its own `udp.o` member removed before final linking, so neither
-upstream datagram implementation is present in the worker.
+supplies explicit rules for the project platform objects. The expected `udp.o`
+is compiled from `platform/raspberry-pi/usb_functionfs.c`. The derived emulator
+support archive has its `udp.o`, `buttons.o`, and `oled.o` members removed. The
+same unmodified SDL OLED source is then compiled under private symbol names and
+linked beside the project display wrapper. Neither upstream datagram
+implementation is present in the worker.
 
 ## Milestones
 
@@ -69,9 +70,11 @@ upstream datagram implementation is present in the worker.
    USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
    interactive confirmation are proven. Full Suite workflows and the separate
    U2F HID interface remain.
-3. **Pending:** mirror the genuine framebuffer to an SSD1306-compatible I2C
-   stream while retaining SDL display/buttons; validate the stream through a
-   second Pi target and an oscilloscope.
+3. **In progress:** the genuine framebuffer is mirrored to an
+   SSD1306-compatible I2C stream while retaining SDL display/buttons. Unit,
+   full-worker, two-target electrical, and 400 kHz oscilloscope validation pass
+   with zero receive loss. SSD1306 interpretation and second-Pi rendering
+   remain.
 4. **Pending:** replace SDL with the physical OLED and GPIO implementation.
 
 The detailed display stages and the Pi 4 controller-clock finding are in

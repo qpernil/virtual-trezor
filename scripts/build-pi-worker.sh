@@ -48,9 +48,10 @@ make -C "$LEGACY_DIR" clean
 make -C "$LEGACY_DIR/emulator" clean
 
 make -C "$LEGACY_DIR/emulator"
-# The upstream emulator archive supplies SDL, flash, and timer. Its UDP and
-# keyboard-only button members are replaced by project platform objects.
-ar d "$LEGACY_DIR/emulator/libemulator.a" udp.o buttons.o
+# The upstream emulator archive supplies host setup, flash, and timer. Its UDP,
+# keyboard-only buttons, and public SDL display symbols are supplied or wrapped
+# by project platform objects. The SDL display source itself remains unmodified.
+ar d "$LEGACY_DIR/emulator/libemulator.a" udp.o buttons.o oled.o
 
 make -C "$LEGACY_DIR"
 make -C "$LEGACY_DIR/firmware/protob"

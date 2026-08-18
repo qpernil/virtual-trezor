@@ -80,6 +80,12 @@ sudo install -o root -g root -m 0644 profiles/virtual-trezor.toml \
   /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
+The profile declares `/dev/i2c-1` as an optional `display-i2c` resource. When
+that device node exists, the supervisor opens it before dropping privileges
+and the worker mirrors SDL refreshes to an SSD1306-compatible display at
+address `0x3c`. No membership in the `i2c` group is required. If the node is
+absent, the worker runs with SDL alone.
+
 The checked-in profile records the account used by the validated Pi. Before
 starting the service, edit the installed profile's `worker.run_as` value to the
 local, unprivileged desktop account that owns the SDL session:

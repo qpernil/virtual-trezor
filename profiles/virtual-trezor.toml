@@ -22,6 +22,12 @@ readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor"
 runtime_directory = "/run/virtual-trezor"
 
+[[resources]]
+name = "display-i2c"
+path = "/dev/i2c-1"
+access = "read-write"
+optional = true
+
 [[functions]]
 type = "functionfs"
 name = "trezor"

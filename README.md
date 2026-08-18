@@ -63,6 +63,8 @@ while changing only the transport boundary:
 - exclude both UDP source files;
 - supply FunctionFS USB, supervisor-control, and practical SDL keyboard/mouse
   button implementations from `platform/raspberry-pi`;
+- mirror the same framebuffer to an SSD1306-compatible display at I2C address
+  `0x3c` when the supervisor supplies `/dev/i2c-1`;
 - do not patch the upstream submodule.
 
 Trezor Suite recognizes the worker and reaches its firmware-check and
@@ -75,9 +77,13 @@ OLED; I2C is an intentional Raspberry Pi platform adaptation that retains the
 genuine upstream framebuffer and UI composition rather than reproducing the
 original electrical display bus.
 
-The first I2C milestone will mirror the same framebuffer to SDL and to an
-SSD1306-compatible I2C stream, retaining the proven SDL controls. A second Pi
-can receive that real bus traffic through
+The first I2C milestone is implemented: the checked-in profile declares
+`/dev/i2c-1` as an optional supervisor resource, and each SDL refresh is also
+emitted as SSD1306 commands plus the unchanged 1,024-byte framebuffer. If the
+resource is absent or a transfer fails, the SDL display and USB worker keep
+running. The physical stream has been validated at 400 kHz against two Pi 3
+targets with zero receive overruns or dropped transactions. A second Pi can
+receive that real bus traffic through
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
 reconstruct the display, and render it for validation before physical display
 hardware is attached. See
