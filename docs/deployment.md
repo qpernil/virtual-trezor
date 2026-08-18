@@ -66,18 +66,15 @@ The resulting executable is `build/virtual-trezor-worker`.
 
 Build and install
 [`usb-gadget-supervisor`](https://github.com/qpernil/usb-gadget-supervisor)
-first, including its binary at `/usr/local/sbin/usb-gadget-supervisor` and its
-template systemd unit.
+first, including its binary, profiles directory, and template systemd unit
+under `/opt/usb-gadget-supervisor` as described in that project's README.
 
-Install the worker and profile:
+The worker runs directly from this repository's build directory. Install only
+the root-owned profile:
 
 ```sh
-sudo install -d -m 0755 /usr/local/libexec/virtual-trezor
-sudo install -d -m 0755 /etc/usb-gadget-supervisor/profiles
-sudo install -o root -g root -m 0755 build/virtual-trezor-worker \
-  /usr/local/libexec/virtual-trezor/virtual-trezor-worker
 sudo install -o root -g root -m 0644 profiles/virtual-trezor.toml \
-  /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
+  /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
 The profile declares `/dev/i2c-1` and `/dev/gpiochip0` as required resources.
@@ -100,32 +97,28 @@ sending the initialization sequence. Firmware No/Yes input uses active-low
 GPIO5 and GPIO26 with pull-ups. These can connect to physical buttons or to the
 button outputs of the second-Pi virtual-display client.
 
-The checked-in profile records the account used by the validated Pi. Before
-starting the service, edit the installed profile's `worker.run_as` value to the
-local, unprivileged account that should own the worker process:
+The checked-in profile records the checkout path and account used by the
+validated Pi. Before installing it, edit `worker.command` and `worker.run_as`
+if the repository or unprivileged account is elsewhere:
 
 ```sh
-sudoedit /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
+editor profiles/virtual-trezor.toml
 ```
 
-The current supervisor service template reads profiles from `/etc`. Confirm
-the path on an older installation with:
+Confirm that the installed service template uses the same `/opt` layout:
 
 ```sh
 systemctl cat usb-gadget-supervisor@.service
 ```
 
-If its `ExecStart` still names an earlier `/opt/usb-gadget-supervisor/profiles`
-layout, update that supervisor installation or place the root-owned profile at
-the path actually named by the unit before validation.
-
-Keep the installed profile and worker root-owned. The supervisor rejects unsafe
-profile ownership or paths. Validate the final file before touching the UDC:
+Keep the installed profile root-owned. The worker may be owned by `run_as`, but
+the supervisor rejects unsafe ownership or paths. Validate the final file
+before touching the UDC:
 
 ```sh
-sudo /usr/local/sbin/usb-gadget-supervisor \
+sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --check-profile \
-  --profile /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
 ## Optional second-Pi display and button bridge
@@ -165,8 +158,8 @@ The worker has no graphical-session dependency. With no competing gadget
 active, an initial foreground launch is:
 
 ```sh
-sudo /usr/local/sbin/usb-gadget-supervisor \
-  --profile /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
+sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
 Start and inspect the systemd service with:
