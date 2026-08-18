@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static display_backend_t display_backend = DISPLAY_SSD1306_I2C;
+static display_backend_t display_backend = DISPLAY_SH1106_SPI;
 
 static bool select_backend(const char *value, char *error, size_t error_size) {
   if (strcmp(value, "ssd1306-i2c") == 0) {
@@ -41,7 +41,7 @@ static bool select_legacy_i2c_display(const char *value, char *error,
 
 bool worker_config_parse(int argc, char *const argv[], char *error,
                          size_t error_size) {
-  display_backend = DISPLAY_SSD1306_I2C;
+  display_backend = DISPLAY_SH1106_SPI;
   bool display_seen = false;
 
   for (int index = 1; index < argc; ++index) {

@@ -67,7 +67,7 @@ address `0x3c` and provide no useful identification query. The checked-in I2C
 profile selects SH1106 for the validated second-Pi setup; change it to SSD1306
 for that controller family. SH1106 reset is GPIO25, requested through the
 required supervisor-opened `/dev/gpiochip0` resource. The factory-configured
-Waveshare HAT uses the separate `sh1106-spi` backend and SPI profile.
+Waveshare HAT uses the default `sh1106-spi` backend and profile.
 
 The upstream framebuffer has the ordering used by the original OLED setup.
 The I2C backend and target renderer were compared against the upstream SDL

@@ -71,37 +71,39 @@ first, including its binary, profiles directory, and template systemd unit
 under `/opt/usb-gadget-supervisor` as described in that project's README.
 
 The worker runs directly from this repository's build directory. Install the
-root-owned profile for the selected display transport. The I2C profile drives
-the second-Pi virtual display or an I2C-native module:
+root-owned default profile for the factory-configured SH1106 SPI HAT:
 
 ```sh
 sudo install -o root -g root -m 0644 profiles/virtual-trezor.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-The SPI profile drives the factory-configured Waveshare SH1106 HAT:
+Install the explicitly named I2C profile when driving the second-Pi virtual
+display or an I2C-native module:
 
 ```sh
-sudo install -o root -g root -m 0644 profiles/virtual-trezor-spi.toml \
-  /opt/usb-gadget-supervisor/profiles/virtual-trezor-spi.toml
+sudo install -o root -g root -m 0644 profiles/virtual-trezor-i2c.toml \
+  /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
 ```
 
-The I2C profile declares `/dev/i2c-1`; the SPI profile declares
-`/dev/spidev0.0`; both declare `/dev/gpiochip0`. The supervisor opens the
+The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
+`/dev/i2c-1`; both declare `/dev/gpiochip0`. The supervisor opens the
 selected resources before dropping privileges and passes inherited file
 descriptors to the worker, so no `i2c`, `spi`, or `gpio` group membership is
 required. The worker exits rather than silently running without its display or
 buttons if a required resource is missing.
 
-Select the backend in the installed profile; do not rely on I2C address
-probing, because both I2C controllers normally use `0x3c`:
+The worker defaults to `sh1106-spi`. Override it in an alternate profile when
+needed; do not rely on I2C address probing, because both I2C controllers
+normally use `0x3c`:
 
 ```toml
 [worker]
 arguments = ["--display=sh1106-i2c"]
 ```
 
-The available values are `ssd1306-i2c`, `sh1106-i2c`, and `sh1106-spi`.
+The available override values are `ssd1306-i2c`, `sh1106-i2c`, and
+`sh1106-spi`.
 SH1106 backends request GPIO25 and pulse reset before sending the initialization
 sequence. SPI additionally drives GPIO24 Data/Command and uses SPI0 CE0 for
 chip select. Firmware No/Yes input uses active-low GPIO5 and GPIO26 with
@@ -114,6 +116,7 @@ if the repository or unprivileged account is elsewhere:
 
 ```sh
 editor profiles/virtual-trezor.toml
+editor profiles/virtual-trezor-i2c.toml
 ```
 
 Confirm that the installed service template uses the same `/opt` layout:
@@ -132,7 +135,7 @@ sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-Validate `virtual-trezor-spi.toml` instead when installing the SPI profile.
+Validate `virtual-trezor-i2c.toml` instead when installing the I2C profile.
 
 ## Physical SH1106 SPI HAT
 
@@ -171,9 +174,7 @@ worker, so address `0x3c` acknowledges the worker's initialization writes:
 
 ```sh
 sudo -E ./prebuilt/aarch64/virtual-display \
-  --display=sh1106 \
   --title "Virtual Trezor display" \
-  --button-outputs=5,26 \
   0x3c ./kernel
 ```
 
@@ -195,14 +196,14 @@ exits, so do not run `target-driver` at the same time.
 ## Start and verify
 
 The worker has no graphical-session dependency. With no competing gadget
-active, an initial foreground I2C launch is:
+active, an initial foreground SPI launch is:
 
 ```sh
 sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-Use `virtual-trezor-spi.toml` for a foreground physical-HAT launch.
+Use `virtual-trezor-i2c.toml` for a foreground virtual-display launch.
 
 Start and inspect the systemd service with:
 
@@ -213,8 +214,8 @@ systemctl --no-pager --full status \
 cat /sys/class/udc/*/state
 ```
 
-For the SPI profile, the instance is
-`usb-gadget-supervisor@virtual-trezor-spi.service`. Never run the I2C and SPI
+For the I2C profile, the instance is
+`usb-gadget-supervisor@virtual-trezor-i2c.service`. Never run the I2C and SPI
 instances together; they share the USB identity, FunctionFS mount, GPIOs, and
 persistent state.
 

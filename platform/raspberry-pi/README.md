@@ -46,9 +46,10 @@ The supervisor opens it while privileged and passes its descriptor as
 performs all device-specific transactions after privilege drop. The SPI
 profile similarly exports `/dev/spidev0.0` as
 `USB_GADGET_RESOURCE_DISPLAY_SPI_FD`. The
-`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option selects the backend
-explicitly; the two I2C controllers cannot be distinguished by probing because
-both normally use `0x3c`.
+worker defaults to SH1106 SPI. The
+`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option overrides the backend;
+the two I2C controllers cannot be distinguished by probing because both
+normally use `0x3c`.
 
 The required `display-gpio` resource passes `/dev/gpiochip0` as
 `USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. SH1106 initialization requests GPIO25

@@ -39,7 +39,7 @@ controller and retransmitting the current framebuffer independently of later
 UI changes. The project-owned worker entry point parses the display selection
 before calling the renamed, otherwise unmodified upstream firmware entry
 point. I2C is a Pi virtual-display choice; the factory SH1106 HAT uses the
-four-wire SPI backend.
+four-wire SPI backend, which is the worker default.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies

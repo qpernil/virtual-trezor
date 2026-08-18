@@ -9,7 +9,7 @@
 | OS | Debian GNU/Linux 13 (trixie) |
 | Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
 | Worker SHA-256 | `dc6de5e4823d65616a5cb8601908a0d31eb4ed4f772d2203cba19e976381cf29` |
-| Supervisor service | `usb-gadget-supervisor@virtual-trezor.service` |
+| Supervisor service during I2C validation | `usb-gadget-supervisor@virtual-trezor-i2c.service` |
 | USB device controller | `fe980000.usb`, state `configured` |
 | FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
 
@@ -122,10 +122,11 @@ concurrently.
   The real Trezor One OLED
   is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
   upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
-- The SH1106 SPI profile and ARM64 worker build are deployed. A no-HAT smoke
-  test opened supervisor-inherited `/dev/spidev0.0`, configured mode 0 at
-  4 MHz, drove GPIO24 Data/Command and GPIO25 reset, and attached FunctionFS.
-  Pixel and button validation against the physical HAT remains pending.
+- The default SH1106 SPI profile and ARM64 worker build are deployed. A
+  no-HAT smoke test opened supervisor-inherited `/dev/spidev0.0`, configured
+  mode 0 at 4 MHz, drove GPIO24 Data/Command and GPIO25 reset, and attached
+  FunctionFS. Pixel and button validation against the physical HAT remains
+  pending.
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
   but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB
   communication works; BOS/WebUSB descriptor parity still needs review.
