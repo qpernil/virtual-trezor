@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "virtual-trezor: %s\n", error);
     fprintf(stderr,
             "usage: virtual-trezor-worker "
-            "[--i2c-display=ssd1306|sh1106]\n");
+            "[--display=ssd1306-i2c|sh1106-i2c|sh1106-spi]\n");
     return 2;
   }
   return trezorFirmwareMain();

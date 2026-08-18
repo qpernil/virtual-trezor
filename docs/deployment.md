@@ -2,10 +2,11 @@
 
 ## Scope
 
-This guide deploys the headless FunctionFS/I2C/GPIO worker on a 64-bit
+This guide deploys the headless FunctionFS/I2C/SPI/GPIO worker on a 64-bit
 Raspberry Pi Linux system. The worker is experimental and must use only
 disposable emulator state and test seeds. It requires a USB Device Controller,
-an I2C controller, and a GPIO chip; it does not require a desktop session.
+the selected I2C or SPI display bus, and a GPIO chip; it does not require a
+desktop session.
 
 The tested architecture has two separately installed projects:
 
@@ -69,33 +70,43 @@ Build and install
 first, including its binary, profiles directory, and template systemd unit
 under `/opt/usb-gadget-supervisor` as described in that project's README.
 
-The worker runs directly from this repository's build directory. Install only
-the root-owned profile:
+The worker runs directly from this repository's build directory. Install the
+root-owned profile for the selected display transport. The I2C profile drives
+the second-Pi virtual display or an I2C-native module:
 
 ```sh
 sudo install -o root -g root -m 0644 profiles/virtual-trezor.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-The profile declares `/dev/i2c-1` and `/dev/gpiochip0` as required resources.
-The supervisor opens them before dropping privileges and passes inherited file
-descriptors to the worker, so no `i2c` or `gpio` group membership is required.
-The worker exits rather than silently running without its display or buttons
-if either resource is missing.
+The SPI profile drives the factory-configured Waveshare SH1106 HAT:
 
-Select the controller in the installed profile; do not rely on address
-probing, because both controllers normally use `0x3c`:
+```sh
+sudo install -o root -g root -m 0644 profiles/virtual-trezor-spi.toml \
+  /opt/usb-gadget-supervisor/profiles/virtual-trezor-spi.toml
+```
+
+The I2C profile declares `/dev/i2c-1`; the SPI profile declares
+`/dev/spidev0.0`; both declare `/dev/gpiochip0`. The supervisor opens the
+selected resources before dropping privileges and passes inherited file
+descriptors to the worker, so no `i2c`, `spi`, or `gpio` group membership is
+required. The worker exits rather than silently running without its display or
+buttons if a required resource is missing.
+
+Select the backend in the installed profile; do not rely on I2C address
+probing, because both I2C controllers normally use `0x3c`:
 
 ```toml
 [worker]
-arguments = ["--i2c-display=sh1106"] # use ssd1306 for that controller family
+arguments = ["--display=sh1106-i2c"]
 ```
 
-The Waveshare 1.3-inch OLED HAT uses SH1106 and GPIO25 reset. With
-`--i2c-display=sh1106`, the worker requests GPIO25 and pulses reset before
-sending the initialization sequence. Firmware No/Yes input uses active-low
-GPIO5 and GPIO26 with pull-ups. These can connect to physical buttons or to the
-button outputs of the second-Pi virtual-display client.
+The available values are `ssd1306-i2c`, `sh1106-i2c`, and `sh1106-spi`.
+SH1106 backends request GPIO25 and pulse reset before sending the initialization
+sequence. SPI additionally drives GPIO24 Data/Command and uses SPI0 CE0 for
+chip select. Firmware No/Yes input uses active-low GPIO5 and GPIO26 with
+pull-ups. These can connect to physical buttons or to the button outputs of the
+second-Pi virtual-display client.
 
 The checked-in profile records the checkout path and account used by the
 validated Pi. Before installing it, edit `worker.command` and `worker.run_as`
@@ -120,6 +131,35 @@ sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --check-profile \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
+
+Validate `virtual-trezor-spi.toml` instead when installing the SPI profile.
+
+## Physical SH1106 SPI HAT
+
+The Waveshare 1.3-inch OLED + Joystick HAT ships in four-wire SPI mode, so it
+needs no resistor changes for the SPI backend. Enable SPI0, reboot if the
+setting changed, and verify its device node before starting the worker:
+
+```sh
+sudo raspi-config nonint do_spi 0
+ls -l /dev/spidev0.0
+```
+
+The factory HAT mapping is:
+
+| Function | BCM GPIO | Physical pin |
+| --- | ---: | ---: |
+| SPI0 MOSI | 10 | 19 |
+| SPI0 SCLK | 11 | 23 |
+| SPI0 CE0 | 8 | 24 |
+| Data/Command | 24 | 18 |
+| Reset | 25 | 22 |
+| No/left | 5 | 29 |
+| Yes/right | 26 | 37 |
+
+The worker configures mode 0 at 4 MHz. Power down before fitting or removing
+the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring
+before installing the physical board.
 
 ## Optional second-Pi display and button bridge
 
@@ -155,12 +195,14 @@ exits, so do not run `target-driver` at the same time.
 ## Start and verify
 
 The worker has no graphical-session dependency. With no competing gadget
-active, an initial foreground launch is:
+active, an initial foreground I2C launch is:
 
 ```sh
 sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
+
+Use `virtual-trezor-spi.toml` for a foreground physical-HAT launch.
 
 Start and inspect the systemd service with:
 
@@ -170,6 +212,11 @@ systemctl --no-pager --full status \
   usb-gadget-supervisor@virtual-trezor.service
 cat /sys/class/udc/*/state
 ```
+
+For the SPI profile, the instance is
+`usb-gadget-supervisor@virtual-trezor-spi.service`. Never run the I2C and SPI
+instances together; they share the USB identity, FunctionFS mount, GPIOs, and
+persistent state.
 
 The UDC should reach `configured` after attachment to the host. Confirm that
 `trezorctl` or the pinned `trezorlib` reports model `1` and firmware `1.14.1`

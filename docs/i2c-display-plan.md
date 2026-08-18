@@ -61,12 +61,13 @@ display bytes require about 23 ms on the wire; at 100 kHz they require about
 addressing, orientation, and initialization commands rather than assuming
 that every write is a complete frame.
 
-The worker option `--i2c-display=ssd1306|sh1106` selects the stream. Explicit
-selection is required because both controllers normally acknowledge address
-`0x3c` and provide no useful identification query. The checked-in profile
-selects SH1106 for the validated Waveshare 1.3-inch OLED HAT setup; change it
-to SSD1306 for that controller family. SH1106 reset is GPIO25, requested
-through the required supervisor-opened `/dev/gpiochip0` resource.
+The worker options `--display=ssd1306-i2c|sh1106-i2c` select the I2C stream.
+Explicit selection is required because both controllers normally acknowledge
+address `0x3c` and provide no useful identification query. The checked-in I2C
+profile selects SH1106 for the validated second-Pi setup; change it to SSD1306
+for that controller family. SH1106 reset is GPIO25, requested through the
+required supervisor-opened `/dev/gpiochip0` resource. The factory-configured
+Waveshare HAT uses the separate `sh1106-spi` backend and SPI profile.
 
 The upstream framebuffer has the ordering used by the original OLED setup.
 The I2C backend and target renderer were compared against the upstream SDL
@@ -83,13 +84,13 @@ belongs in upstream `legacy/oled.c`.
    drop counters under repeated animation traffic.
 5. **Complete:** remove local SDL and use GPIO5/GPIO26 for firmware buttons;
    the remote viewer can hold those lines low from mouse input.
-6. **Pending:** attach and validate a physical 128x64 I2C OLED/button HAT.
+6. **Pending:** attach and validate an I2C-native physical 128x64 OLED.
 
 `usb-gadget-supervisor` opens the required `display-i2c` and `display-gpio`
 resources and exports their descriptors as
 `USB_GADGET_RESOURCE_DISPLAY_I2C_FD` and
 `USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. Pure C tests verify both exact command
-streams, page/address construction, option parsing, and byte-for-byte
+streams, page/address construction, I2C/SPI option parsing, and byte-for-byte
 framebuffer payloads.
 
 ## Wired validation

@@ -5,15 +5,33 @@
 #include <stdio.h>
 #include <string.h>
 
-static i2c_display_controller_t display_controller = I2C_DISPLAY_SSD1306;
+static display_backend_t display_backend = DISPLAY_SSD1306_I2C;
 
-static bool select_display(const char *value, char *error, size_t error_size) {
+static bool select_backend(const char *value, char *error, size_t error_size) {
+  if (strcmp(value, "ssd1306-i2c") == 0) {
+    display_backend = DISPLAY_SSD1306_I2C;
+    return true;
+  }
+  if (strcmp(value, "sh1106-i2c") == 0) {
+    display_backend = DISPLAY_SH1106_I2C;
+    return true;
+  }
+  if (strcmp(value, "sh1106-spi") == 0) {
+    display_backend = DISPLAY_SH1106_SPI;
+    return true;
+  }
+  snprintf(error, error_size, "unsupported --display backend: %s", value);
+  return false;
+}
+
+static bool select_legacy_i2c_display(const char *value, char *error,
+                                      size_t error_size) {
   if (strcmp(value, "ssd1306") == 0) {
-    display_controller = I2C_DISPLAY_SSD1306;
+    display_backend = DISPLAY_SSD1306_I2C;
     return true;
   }
   if (strcmp(value, "sh1106") == 0) {
-    display_controller = I2C_DISPLAY_SH1106;
+    display_backend = DISPLAY_SH1106_I2C;
     return true;
   }
   snprintf(error, error_size,
@@ -23,19 +41,30 @@ static bool select_display(const char *value, char *error, size_t error_size) {
 
 bool worker_config_parse(int argc, char *const argv[], char *error,
                          size_t error_size) {
-  display_controller = I2C_DISPLAY_SSD1306;
+  display_backend = DISPLAY_SSD1306_I2C;
   bool display_seen = false;
 
   for (int index = 1; index < argc; ++index) {
     const char *argument = argv[index];
     const char *value = NULL;
-    if (strcmp(argument, "--i2c-display") == 0) {
+    bool legacy_i2c = false;
+    if (strcmp(argument, "--display") == 0) {
+      if (++index >= argc) {
+        snprintf(error, error_size, "--display requires a value");
+        return false;
+      }
+      value = argv[index];
+    } else if (strncmp(argument, "--display=", 10) == 0) {
+      value = argument + 10;
+    } else if (strcmp(argument, "--i2c-display") == 0) {
+      legacy_i2c = true;
       if (++index >= argc) {
         snprintf(error, error_size, "--i2c-display requires a value");
         return false;
       }
       value = argv[index];
     } else if (strncmp(argument, "--i2c-display=", 14) == 0) {
+      legacy_i2c = true;
       value = argument + 14;
     } else {
       snprintf(error, error_size, "unknown worker argument: %s", argument);
@@ -43,27 +72,39 @@ bool worker_config_parse(int argc, char *const argv[], char *error,
     }
 
     if (display_seen) {
-      snprintf(error, error_size, "--i2c-display may be specified only once");
+      snprintf(error, error_size,
+               "a display backend may be specified only once");
       return false;
     }
     display_seen = true;
-    if (!select_display(value, error, error_size)) {
+    if (legacy_i2c
+            ? !select_legacy_i2c_display(value, error, error_size)
+            : !select_backend(value, error, error_size)) {
       return false;
     }
   }
   return true;
 }
 
-i2c_display_controller_t worker_i2c_display_controller(void) {
-  return display_controller;
+display_backend_t worker_display_backend(void) { return display_backend; }
+
+bool worker_display_is_sh1106(void) {
+  return display_backend == DISPLAY_SH1106_I2C ||
+         display_backend == DISPLAY_SH1106_SPI;
 }
 
-const char *worker_i2c_display_controller_name(void) {
-  switch (display_controller) {
-    case I2C_DISPLAY_SSD1306:
-      return "ssd1306";
-    case I2C_DISPLAY_SH1106:
-      return "sh1106";
+bool worker_display_uses_spi(void) {
+  return display_backend == DISPLAY_SH1106_SPI;
+}
+
+const char *worker_display_backend_name(void) {
+  switch (display_backend) {
+    case DISPLAY_SSD1306_I2C:
+      return "ssd1306-i2c";
+    case DISPLAY_SH1106_I2C:
+      return "sh1106-i2c";
+    case DISPLAY_SH1106_SPI:
+      return "sh1106-spi";
   }
   return "unknown";
 }
