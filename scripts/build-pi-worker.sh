@@ -28,11 +28,6 @@ if [[ "$("$PROTOC_BIN" --version)" != "libprotoc 33.5" ]]; then
   echo "Trezor v1.14.1 requires protoc 33.5; found: $("$PROTOC_BIN" --version)" >&2
   exit 1
 fi
-if ! pkg-config --exists sdl2 SDL2_image; then
-  echo "The initial worker requires SDL2 and SDL2_image development files." >&2
-  exit 1
-fi
-
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 
 TOOL_BIN="$PROJECT_ROOT/build/upstream-tools/bin"
@@ -47,11 +42,14 @@ make -C "$LEGACY_DIR/firmware" -f "$PROJECT_ROOT/mk/worker-firmware.mk" clean
 make -C "$LEGACY_DIR" clean
 make -C "$LEGACY_DIR/emulator" clean
 
-make -C "$LEGACY_DIR/emulator"
-# The upstream emulator archive supplies host setup, flash, and timer. Its UDP,
-# keyboard-only buttons, and public SDL display symbols are supplied or wrapped
-# by project platform objects. The SDL display source itself remains unmodified.
-ar d "$LEGACY_DIR/emulator/libemulator.a" udp.o buttons.o oled.o
+make -C "$LEGACY_DIR/emulator" setup.o memory.o timer.o strl.o
+# Build only the non-UI host facilities needed by the firmware worker. USB,
+# display, and buttons are supplied entirely by project platform objects.
+ar rcs "$LEGACY_DIR/emulator/libemulator.a" \
+  "$LEGACY_DIR/emulator/setup.o" \
+  "$LEGACY_DIR/emulator/memory.o" \
+  "$LEGACY_DIR/emulator/timer.o" \
+  "$LEGACY_DIR/emulator/strl.o"
 
 make -C "$LEGACY_DIR"
 make -C "$LEGACY_DIR/firmware/protob"

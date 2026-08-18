@@ -9,9 +9,9 @@ unmodified in this project.
 
 A physical Trezor One sends the framebuffer to its OLED over STM32 SPI, using
 separate chip-select, data/command, and reset GPIOs. The Raspberry Pi backend
-will instead emit an SSD1306-compatible I2C stream at address `0x3c`. This is a
-deliberate platform adaptation: firmware/UI fidelity is retained above
-`oledRefresh`, while the board-level display transport is different.
+instead emits a selectable SSD1306 or SH1106 I2C stream at address `0x3c`.
+This is a deliberate platform adaptation: firmware/UI fidelity is retained
+above `oledRefresh`, while the board-level display transport is different.
 
 ## Validation topology
 
@@ -20,9 +20,9 @@ The initial wired setup uses two Linux systems and a real I2C bus:
 ```text
 controller Pi                                      target Pi
 
-unmodified Trezor UI composition                   SSD1306 interpreter
+unmodified Trezor UI composition                   display protocol consumer
 legacy/oled.c framebuffer                           framebuffer reconstruction
-platform oledRefresh                               SDL/HDMI renderer
+platform oledRefresh                               virtual-display SDL renderer
         |                                                   ^
         v                                                   |
     /dev/i2c-1 -- physical SDA, SCL, and ground --> /dev/bsc-target0
@@ -31,7 +31,7 @@ platform oledRefresh                               SDL/HDMI renderer
 The controller runs the Virtual Trezor worker and sends real electrical I2C.
 The target runs the interrupt-driven driver from
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target)
-and a future SSD1306 userspace interpreter. A Siglent SDS824X HD observes SCL,
+and the `virtual-display` protocol interpreter. A Siglent SDS824X HD observes SCL,
 SDA, and optional controller/target timing markers.
 
 Pi 3 and Pi 4 can run the existing BSC target driver. Pi 5 can be the
@@ -43,52 +43,53 @@ driver.
 The project backend now provides the emulator-build symbols that upstream
 expects:
 
-- `oledInit` receives the optional supervisor-opened I2C controller resource
-  and emits the SSD1306 initialization command stream;
+- `oledInit` receives the required supervisor-opened I2C controller resource
+  and emits the selected controller's initialization command stream;
 - `oledRefresh` obtains the bytes from upstream `oledGetBuffer`, positions the
   display, and writes the frame;
 - `emulatorPoll` remains available because the firmware transport calls it on
   emulator builds.
 
-An SSD1306-compatible I2C transaction normally prefixes command bytes with
-control byte `0x00` and display data with control byte `0x40`. A complete data
-refresh is therefore 1025 payload bytes before address and bus framing. At
-400 kHz the 1024 display bytes require about 23 ms on the wire; at 100 kHz they
-require about 92 ms. The target interpreter must also process addressing,
-orientation, and initialization commands rather than assuming that every
-write is a complete frame.
+Both supported streams prefix command bytes with control byte `0x00` and
+display data with control byte `0x40`. SSD1306 uses a seven-byte horizontal
+address-window message followed by one 1,025-byte framebuffer message. SH1106
+uses page addressing: each of eight pages has a four-byte command message and
+a 129-byte data message, for 1,064 bytes per refresh. At 400 kHz the 1024
+display bytes require about 23 ms on the wire; at 100 kHz they require about
+92 ms, before the small command overhead. The target interpreter must process
+addressing, orientation, and initialization commands rather than assuming
+that every write is a complete frame.
+
+The worker option `--i2c-display=ssd1306|sh1106` selects the stream. Explicit
+selection is required because both controllers normally acknowledge address
+`0x3c` and provide no useful identification query. The checked-in profile
+defaults to SSD1306. The Waveshare 1.3-inch OLED HAT uses SH1106; its reset is
+GPIO25, requested through the required supervisor-opened `/dev/gpiochip0`
+resource.
 
 The upstream framebuffer has the ordering used by the original OLED setup.
-The I2C backend and target renderer will compare known frames against the SDL
-renderer before deciding whether a selected SSD1306 module needs byte, bit,
-page, or segment remapping. No transformation belongs in upstream
-`legacy/oled.c`.
+The I2C backend and target renderer were compared against the upstream SDL
+baseline when deciding byte, bit, page, and segment mapping. No transformation
+belongs in upstream `legacy/oled.c`.
 
 ## Staged implementation
 
-1. Add a transitional platform display that retains the SDL window and
-   `emulatorPoll` while mirroring every refresh to `/dev/i2c-1` at `0x3c`.
-2. Add an SSD1306 target process that reconstructs controller state and renders
-   the received framebuffer on the second Pi.
-3. Compare SDL and target-rendered frames, including startup, home, PIN,
-   confirmation, and progress layouts.
-4. Capture address, ACK, command, frame data, rise time, and full-refresh
-   duration with the oscilloscope; run repeated 1025-byte transfers while
-   checking target-driver overrun/drop counters.
-5. Add physical GPIO buttons and a non-SDL display backend.
-6. Attach and validate a physical 128x64 I2C OLED.
+1. **Complete:** mirror the upstream SDL baseline to SSD1306 and SH1106 I2C.
+2. **Complete:** reconstruct and render either controller stream on a second
+   Pi with the generic `virtual-display` client.
+3. **Complete:** compare startup, prompts, confirmations, and animations.
+4. **Complete:** capture the bus at 400 kHz and verify target-driver overrun and
+   drop counters under repeated animation traffic.
+5. **Complete:** remove local SDL and use GPIO5/GPIO26 for firmware buttons;
+   the remote viewer can hold those lines low from mouse input.
+6. **Pending:** attach and validate a physical 128x64 I2C OLED/button HAT.
 
-Keeping SDL in the first stage preserves the already-tested click and keyboard
-confirmation path. It also lets USB, firmware behavior, I2C transport, and
-target rendering be compared without changing all platform boundaries at
-once.
-
-Stage 1 is implemented. `usb-gadget-supervisor` opens the optional
-`display-i2c` profile resource and exports its descriptor as
-`USB_GADGET_RESOURCE_DISPLAY_I2C_FD`. The worker emits a 26-byte initialization
-message, a seven-byte horizontal address-window message, and a 1,025-byte data
-message. A pure C test verifies the exact command bytes and byte-for-byte
-framebuffer payload. Stages 2 through 6 remain.
+`usb-gadget-supervisor` opens the required `display-i2c` and `display-gpio`
+resources and exports their descriptors as
+`USB_GADGET_RESOURCE_DISPLAY_I2C_FD` and
+`USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. Pure C tests verify both exact command
+streams, page/address construction, option parsing, and byte-for-byte
+framebuffer payloads.
 
 ## Wired validation
 
@@ -112,6 +113,22 @@ idle interval is shorter. No bytes were lost. The SSD1306 interpreter must
 therefore parse control bytes and command/data lengths as a byte stream rather
 than assuming every character-device `read()` maps one-to-one to a controller
 `write()`.
+
+The SH1106 stream was validated on the same physical bus on 2026-08-18. Two
+independent worker/target runs each received exactly 139,412 bytes:
+
+```text
+26-byte initialization + 2-byte display-on +
+131 * (8 * (4-byte page command + 129-byte page data))
+```
+
+The ARM64 build, project option wrapper, supervisor resource handoff, GPIO v2
+reset request, I2C address selection, and page stream were all exercised. The
+service logged SH1106 selection at `0x3c`, and the kernel reported GPIO25 as
+an output owned by `virtual-trezor-display`; the receive-only target returned
+no data and both captures ended on the same complete-frame boundary. The
+second-Pi renderer subsequently confirmed orientation and the two-column
+SH1106 RAM offset; the physical Waveshare HAT remains to be tested.
 
 ## Pi 4 controller clock verification
 

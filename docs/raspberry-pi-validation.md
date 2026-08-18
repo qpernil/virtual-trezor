@@ -16,25 +16,24 @@
 The root supervisor created ConfigFS and FunctionFS resources, bound the USB
 device controller, and launched the firmware worker as the unprivileged user
 `per`. The worker inherited the supervisor control socket and FunctionFS mount,
-published its descriptors, and opened the endpoint files itself. SDL display
-and buttons continued to run in that unprivileged process.
+published its descriptors, and opened the endpoint files itself. The current
+worker drives I2C and GPIO through additional supervisor-opened descriptors.
 
 ## Build
 
-The Pi build used GCC, SDL2, SDL2_image, the pinned upstream `uv` environment,
-and `libprotoc 33.5`:
+The Pi build used GCC, the pinned upstream `uv` environment, and `libprotoc
+33.5`:
 
 ```sh
 PROTOC_BIN=/path/to/protoc-33.5 make worker
 ```
 
 The build used the upstream legacy firmware Makefile for the real firmware
-object list. `mk/worker-firmware.mk` changed only the source rule for the
-firmware's expected `udp.o`, compiling it from
-`platform/raspberry-pi/usb_functionfs.c`. The upstream emulator support archive
-provided SDL, buttons, flash, timer, and host setup after its UDP member was
-removed. The final worker contained the project FunctionFS symbols and neither
-upstream `emulatorSocket` implementation.
+object list. `mk/worker-firmware.mk` supplies project objects for the
+firmware's expected USB, display, and button symbols. The emulator support
+archive is constructed only from setup, memory, timer, and string compatibility
+objects. The final worker contains FunctionFS/I2C/GPIO platform symbols and
+neither upstream `emulatorSocket` implementation nor SDL.
 
 ## USB and protocol results
 
@@ -77,8 +76,10 @@ does not authenticate this Linux worker as an official signed embedded image.
 A protected ping was used to verify interactive behavior. While the host
 waited on a `ProtectCall` button request, a dedicated FunctionFS reader thread
 remained blocked in the kernel and the main firmware thread continued polling
-SDL. Clicking the right half of the SDL window produced the genuine upstream
-button press/release transition and completed the protected request.
+buttons. The second-Pi virtual-display client held the appropriate GPIO line
+low for the duration of a mouse press, producing the genuine upstream button
+press/release transition and completing the request. Left, right, and both-
+button input are represented by the two independent active-low lines.
 
 ## Coexistence with other gadget profiles
 
@@ -95,11 +96,13 @@ concurrently.
   but the separate U2F HID interface is not yet exposed.
 - Full Trezor Suite device initialization and recovery/setup workflows still
   require interactive validation.
-- The current display and buttons use SDL/X11. The optional SSD1306-compatible
-  I2C mirror is deployed and has transferred complete frames to two Pi 3
-  targets at a measured 400 kHz with zero receive overruns or drops. SSD1306
-  interpretation, target-side rendering, and a physical OLED remain. GPIO
-  buttons and a non-SDL backend are later milestones. The real Trezor One OLED
+- The required SSD1306/SH1106 I2C backend and GPIO button backend are deployed.
+  SSD1306 transferred complete frames to two Pi 3 targets
+  at a measured 400 kHz with zero receive overruns or drops. SH1106 produced
+  two deterministic captures of 139,412 bytes each: 28 initialization bytes
+  plus 131 complete 1,064-byte page-addressed refreshes. Target-side rendering
+  and remote button control are validated; a physical OLED/button HAT remains.
+  The real Trezor One OLED
   is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
   upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,

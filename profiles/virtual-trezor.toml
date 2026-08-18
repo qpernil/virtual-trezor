@@ -17,6 +17,7 @@ max_power_ma = 100
 
 [worker]
 command = "/usr/local/libexec/virtual-trezor/virtual-trezor-worker"
+arguments = ["--i2c-display=sh1106"]
 run_as = "per"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor"
@@ -26,7 +27,13 @@ runtime_directory = "/run/virtual-trezor"
 name = "display-i2c"
 path = "/dev/i2c-1"
 access = "read-write"
-optional = true
+optional = false
+
+[[resources]]
+name = "display-gpio"
+path = "/dev/gpiochip0"
+access = "read-write"
+optional = false
 
 [[functions]]
 type = "functionfs"
