@@ -47,8 +47,9 @@ expects:
   and emits the selected controller's initialization command stream;
 - `oledRefresh` obtains the bytes from upstream `oledGetBuffer`, positions the
   display, and writes the frame;
-- `emulatorPoll` remains available because the firmware transport calls it on
-  emulator builds.
+- `emulatorPoll` uses the firmware transport's regular emulator poll call to
+  retry a failed transfer after one second and retransmit the current
+  framebuffer even if the UI does not refresh again.
 
 Both supported streams prefix command bytes with control byte `0x00` and
 display data with control byte `0x40`. SSD1306 uses a seven-byte horizontal
