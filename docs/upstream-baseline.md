@@ -62,5 +62,6 @@ Linux build environment.
 
 The linked baseline intentionally contains SDL and UDP because it proves the
 official upstream target before replacement. The Raspberry Pi worker now
-retains SDL while excluding both upstream UDP implementations; its validation
-is recorded in [`raspberry-pi-validation.md`](raspberry-pi-validation.md).
+replaces both upstream UDP implementations, the SDL display, and SDL buttons
+with FunctionFS, I2C, and GPIO platform objects; its validation is recorded in
+[`raspberry-pi-validation.md`](raspberry-pi-validation.md).

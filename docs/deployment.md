@@ -91,7 +91,7 @@ probing, because both controllers normally use `0x3c`:
 
 ```toml
 [worker]
-arguments = ["--i2c-display=ssd1306"] # or sh1106
+arguments = ["--i2c-display=sh1106"] # use ssd1306 for that controller family
 ```
 
 The Waveshare 1.3-inch OLED HAT uses SH1106 and GPIO25 reset. With
@@ -108,6 +108,17 @@ local, unprivileged account that should own the worker process:
 sudoedit /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
+The current supervisor service template reads profiles from `/etc`. Confirm
+the path on an older installation with:
+
+```sh
+systemctl cat usb-gadget-supervisor@.service
+```
+
+If its `ExecStart` still names an earlier `/opt/usb-gadget-supervisor/profiles`
+layout, update that supervisor installation or place the root-owned profile at
+the path actually named by the unit before validation.
+
 Keep the installed profile and worker root-owned. The supervisor rejects unsafe
 profile ownership or paths. Validate the final file before touching the UDC:
 
@@ -116,6 +127,37 @@ sudo /usr/local/sbin/usb-gadget-supervisor \
   --check-profile \
   --profile /etc/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
+
+## Optional second-Pi display and button bridge
+
+A physical OLED and buttons may be replaced during development by the generic
+`virtual-display` client from
+[`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target).
+Run it from a graphical session on a Pi 3/3B+ target before starting the
+worker, so address `0x3c` acknowledges the worker's initialization writes:
+
+```sh
+sudo -E ./prebuilt/aarch64/virtual-display \
+  --display=sh1106 \
+  --title "Virtual Trezor display" \
+  --button-outputs=5,26 \
+  0x3c ./kernel
+```
+
+The 40-pin wiring is the same on the tested Pi 4 controller and Pi 3B+ target:
+
+| Signal | Worker/controller Pi | Viewer/target Pi |
+| --- | --- | --- |
+| SDA | GPIO2, physical pin 3 | GPIO2, physical pin 3 |
+| SCL | GPIO3, physical pin 5 | GPIO3, physical pin 5 |
+| Ground | physical pin 6 | physical pin 6 |
+| No/left | GPIO5, physical pin 29, input | GPIO5, physical pin 29, open-drain output |
+| Yes/right | GPIO26, physical pin 37, input | GPIO26, physical pin 37, open-drain output |
+
+Do not connect the boards' power rails. Holding the viewer's left, middle, or
+right third drives No, both buttons, or Yes for as long as the mouse button
+remains down. The client owns the target driver and unloads it when the client
+exits, so do not run `target-driver` at the same time.
 
 ## Start and verify
 

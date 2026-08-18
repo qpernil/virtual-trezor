@@ -71,8 +71,8 @@ Trezor Suite recognizes the worker and reaches its firmware-check and
 on-device confirmation workflow; complete setup/recovery validation remains.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
 interface, so the separate U2F HID interface is also pending. A real Trezor
-One uses SPI for its
-OLED; I2C is an intentional Raspberry Pi platform adaptation that retains the
+One uses SPI for its OLED; I2C is an intentional Raspberry Pi platform
+adaptation that retains the
 genuine upstream framebuffer and UI composition rather than reproducing the
 original electrical display bus.
 
@@ -84,8 +84,8 @@ read on GPIO5 and GPIO26. Both physical display streams have been validated at
 400 kHz against the Pi 3 target driver. A second Pi can receive that real bus
 traffic through
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
-reconstruct the display, and render it for validation before physical display
-hardware is attached. See
+reconstruct the display, render it through SDL, and drive the worker's two
+button GPIO inputs from mouse presses. See
 [`docs/i2c-display-plan.md`](docs/i2c-display-plan.md).
 
 Each Pi exposes one USB device controller. Virtual YubiKey and Virtual Trezor
