@@ -95,9 +95,12 @@ concurrently.
   but the separate U2F HID interface is not yet exposed.
 - Full Trezor Suite device initialization and recovery/setup workflows still
   require interactive validation.
-- The current display and buttons use SDL/X11. Physical OLED-over-I2C and GPIO
-  button drivers are the next platform milestone. The real Trezor One OLED is
-  SPI; the planned I2C stream is a Raspberry Pi adaptation around the unchanged
+- The current display and buttons use SDL/X11. The optional SSD1306-compatible
+  I2C mirror is deployed and has transferred complete frames to two Pi 3
+  targets at a measured 400 kHz with zero receive overruns or drops. SSD1306
+  interpretation, target-side rendering, and a physical OLED remain. GPIO
+  buttons and a non-SDL backend are later milestones. The real Trezor One OLED
+  is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
   upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
   but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB

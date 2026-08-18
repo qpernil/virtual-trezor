@@ -40,11 +40,11 @@ driver.
 
 ## Display transaction model
 
-The project backend will provide the emulator-build symbols that upstream
+The project backend now provides the emulator-build symbols that upstream
 expects:
 
-- `oledInit` opens or receives the I2C controller resource and emits the
-  selected module's initialization command stream;
+- `oledInit` receives the optional supervisor-opened I2C controller resource
+  and emits the SSD1306 initialization command stream;
 - `oledRefresh` obtains the bytes from upstream `oledGetBuffer`, positions the
   display, and writes the frame;
 - `emulatorPoll` remains available because the firmware transport calls it on
@@ -82,6 +82,36 @@ Keeping SDL in the first stage preserves the already-tested click and keyboard
 confirmation path. It also lets USB, firmware behavior, I2C transport, and
 target rendering be compared without changing all platform boundaries at
 once.
+
+Stage 1 is implemented. `usb-gadget-supervisor` opens the optional
+`display-i2c` profile resource and exports its descriptor as
+`USB_GADGET_RESOURCE_DISPLAY_I2C_FD`. The worker emits a 26-byte initialization
+message, a seven-byte horizontal address-window message, and a 1,025-byte data
+message. A pure C test verifies the exact command bytes and byte-for-byte
+framebuffer payload. Stages 2 through 6 remain.
+
+## Wired validation
+
+On 2026-08-18, a Pi 4 controller running the deployed Virtual Trezor worker
+sent the stream at a scope-measured 400 kHz to two Pi 3 targets connected to
+the same bus and activated one at a time at address `0x3c`. Each target
+received 135,218 bytes:
+
+```text
+26-byte initialization + 131 * (7-byte address window + 1025-byte frame)
+```
+
+Both target runs reported `rx_overruns=0`, `rx_dropped=0`, and no transmitted
+response data. The controller remained an enumerated, responsive Trezor USB
+gadget while mirroring the display.
+
+The two targets delivered 210 and 225 userspace records for the identical byte
+total. The BSC target peripheral does not expose STOP directly, so its 100 us
+completion timer can combine adjacent controller writes when the inter-message
+idle interval is shorter. No bytes were lost. The SSD1306 interpreter must
+therefore parse control bytes and command/data lengths as a byte stream rather
+than assuming every character-device `read()` maps one-to-one to a controller
+`write()`.
 
 ## Pi 4 controller clock verification
 
