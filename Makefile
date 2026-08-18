@@ -11,7 +11,6 @@ init:
 	./scripts/init-upstream.sh
 
 init-baseline: init
-	git -C upstream/trezor-firmware submodule update --init vendor/libopencm3
 
 check: check-upstream check-worker-boundary check-platform
 

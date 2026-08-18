@@ -119,11 +119,12 @@ make check
 
 This does not recursively initialize dependencies for newer Trezor models.
 The linked firmware dependencies are nanopb, QR-Code-generator, and
-secp256k1-zkp. The monorepo's locked `uv` environment additionally requires
-the unlinked `ts-tvl` Python package to be present.
+secp256k1-zkp. The retained emulator setup object also includes a libopencm3
+flash header, without linking that library. The monorepo's locked `uv`
+environment additionally requires the unlinked `ts-tvl` Python package.
 
-The optional upstream emulator baseline also needs libopencm3 headers, SDL2,
-SDL2_image, and an exactly compatible `protoc`:
+The optional upstream emulator baseline additionally needs SDL2, SDL2_image,
+and an exactly compatible `protoc`:
 
 ```sh
 make init-baseline
