@@ -86,6 +86,13 @@ sudo install -o root -g root -m 0644 profiles/virtual-trezor-i2c.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
 ```
 
+The resulting choices are:
+
+| Supervisor instance | Display path | Worker argument |
+| --- | --- | --- |
+| `virtual-trezor` | Direct SH1106 over SPI0 | none; `sh1106-spi` is the default |
+| `virtual-trezor-i2c` | SH1106 over I2C1, including the second-Pi viewer | `--display=sh1106-i2c` |
+
 The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
 `/dev/i2c-1`; both declare `/dev/gpiochip0`. The supervisor opens the
 selected resources before dropping privileges and passes inherited file
@@ -133,9 +140,10 @@ before touching the UDC:
 sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --check-profile \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
+sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
+  --check-profile \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
 ```
-
-Validate `virtual-trezor-i2c.toml` instead when installing the I2C profile.
 
 ## Physical SH1106 SPI HAT
 
@@ -148,6 +156,10 @@ sudo raspi-config nonint do_spi 0
 ls -l /dev/spidev0.0
 ```
 
+SPI0 and I2C1 may remain enabled simultaneously; they use different pins on
+the worker Pi. The selected supervisor profile determines which bus the worker
+opens.
+
 The factory HAT mapping is:
 
 | Function | BCM GPIO | Physical pin |
@@ -159,6 +171,10 @@ The factory HAT mapping is:
 | Reset | 25 | 22 |
 | No/left | 5 | 29 |
 | Yes/right | 26 | 37 |
+
+No/left and Yes/right mean the HAT joystick directions. Its separate KEY1,
+KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16 and are not sampled by
+the current two-button Trezor backend.
 
 The worker configures mode 0 at 4 MHz. Power down before fitting or removing
 the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring
@@ -203,7 +219,8 @@ sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-Use `virtual-trezor-i2c.toml` for a foreground virtual-display launch.
+For a foreground virtual-display launch, substitute
+`virtual-trezor-i2c.toml` in that command.
 
 Start and inspect the systemd service with:
 
@@ -218,6 +235,23 @@ For the I2C profile, the instance is
 `usb-gadget-supervisor@virtual-trezor-i2c.service`. Never run the I2C and SPI
 instances together; they share the USB identity, FunctionFS mount, GPIOs, and
 persistent state.
+
+Switch from the direct SPI HAT to the I2C/SDL path with:
+
+```sh
+sudo systemctl stop usb-gadget-supervisor@virtual-trezor.service
+sudo systemctl start usb-gadget-supervisor@virtual-trezor-i2c.service
+```
+
+Switch back to the default SPI path with:
+
+```sh
+sudo systemctl stop usb-gadget-supervisor@virtual-trezor-i2c.service
+sudo systemctl start usb-gadget-supervisor@virtual-trezor.service
+```
+
+If using `systemctl enable`, enable only the profile that should claim the UDC
+at boot, and ensure Virtual YubiKey or other gadget instances are disabled.
 
 The UDC should reach `configured` after attachment to the host. Confirm that
 `trezorctl` or the pinned `trezorlib` reports model `1` and firmware `1.14.1`

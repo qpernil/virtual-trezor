@@ -36,6 +36,13 @@ exact protobuf compiler required by the pinned firmware release:
 PROTOC_BIN=/path/to/protoc-33.5 make worker
 ```
 
+The default runtime arrangement is a factory-configured SH1106 SPI HAT on the
+same Pi as the worker. SPI0 uses GPIO8/10/11, Data/Command uses GPIO24, reset
+uses GPIO25, and the Trezor No/Yes inputs use joystick-left/right on
+GPIO5/GPIO26. Install `profiles/virtual-trezor.toml` for that arrangement.
+Use `profiles/virtual-trezor-i2c.toml` only for the second-Pi SDL viewer or a
+resoldered I2C display.
+
 See [`docs/deployment.md`](docs/deployment.md) for Raspberry Pi prerequisites,
 installation, profile customization, and USB gadget startup.
 
