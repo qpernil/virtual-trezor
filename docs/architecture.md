@@ -31,11 +31,13 @@ display refresh:
 The Pi worker excludes `legacy/emulator/oled.c`. Project-owned `oledInit` and
 `oledRefresh` implementations send the existing framebuffer directly to an
 explicitly selected SSD1306 or SH1106 controller through an inherited I2C
-descriptor. `emulatorPoll` remains a no-op ABI symbol because the upstream
-firmware loop calls it in emulator builds. The project-owned worker entry point
-parses the display selection before calling the renamed, otherwise unmodified
-upstream firmware entry point. I2C is a Pi platform choice, not a claim that
-the original Trezor One display bus is I2C.
+descriptor. `emulatorPoll` remains a platform ABI symbol because the upstream
+firmware loop calls it in emulator builds. In this implementation it retries a
+failed display transfer after one second, reinitializing the controller and
+retransmitting the current framebuffer independently of later UI changes. The
+project-owned worker entry point parses the display selection before calling
+the renamed, otherwise unmodified upstream firmware entry point. I2C is a Pi
+platform choice, not a claim that the original Trezor One display bus is I2C.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies

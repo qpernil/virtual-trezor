@@ -13,7 +13,7 @@ The current replacement surface is:
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; FunctionFS descriptors/endpoints and supervisor lifecycle |
 | `buttons_gpio.c` | `buttonRead`; active-low GPIO5 and GPIO26 inputs for No and Yes |
-| `display_i2c.c` | `oledInit`, `oledRefresh`, and no-op `emulatorPoll`; send the upstream framebuffer over an inherited I2C descriptor |
+| `display_i2c.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over an inherited I2C descriptor |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
@@ -52,7 +52,10 @@ The required `display-gpio` resource passes `/dev/gpiochip0` as
 `USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. SH1106 initialization requests GPIO25
 and performs the vendor reset pulse. The button backend requests GPIO5 and
 GPIO26 as pull-up inputs from the same GPIO chip. Missing resources are fatal;
-an I2C transfer failure is logged and retried without terminating USB service.
+an I2C transfer failure is logged without terminating USB service. The regular
+firmware `emulatorPoll` path retries after one second, reinitializes the display,
+and retransmits the current framebuffer even when the UI produces no later
+refresh.
 
 The original Trezor One OLED transport is SPI. The I2C backend is a Pi
 platform adaptation around the unchanged upstream framebuffer, not an attempt

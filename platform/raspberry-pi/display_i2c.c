@@ -219,4 +219,12 @@ void oledInit(void) { write_framebuffer(); }
 
 void oledRefresh(void) { write_framebuffer(); }
 
-void emulatorPoll(void) {}
+void emulatorPoll(void) {
+  if (display_ready || retry_after_ms == 0) {
+    return;
+  }
+  if (monotonic_ms() < retry_after_ms) {
+    return;
+  }
+  write_framebuffer();
+}
