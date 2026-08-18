@@ -72,19 +72,31 @@ int main(void) {
   char error[160];
   char *default_arguments[] = {"virtual-trezor-worker"};
   assert(worker_config_parse(1, default_arguments, error, sizeof(error)));
-  assert(worker_i2c_display_controller() == I2C_DISPLAY_SSD1306);
+  assert(worker_display_backend() == DISPLAY_SSD1306_I2C);
+  assert(!worker_display_is_sh1106());
+  assert(!worker_display_uses_spi());
 
   char *sh1106_arguments[] = {"virtual-trezor-worker",
-                              "--i2c-display=sh1106"};
+                              "--display=sh1106-i2c"};
   assert(worker_config_parse(2, sh1106_arguments, error, sizeof(error)));
-  assert(worker_i2c_display_controller() == I2C_DISPLAY_SH1106);
-  assert(strcmp(worker_i2c_display_controller_name(), "sh1106") == 0);
+  assert(worker_display_backend() == DISPLAY_SH1106_I2C);
+  assert(worker_display_is_sh1106());
+  assert(!worker_display_uses_spi());
+  assert(strcmp(worker_display_backend_name(), "sh1106-i2c") == 0);
+
+  char *spi_arguments[] = {"virtual-trezor-worker",
+                           "--display=sh1106-spi"};
+  assert(worker_config_parse(2, spi_arguments, error, sizeof(error)));
+  assert(worker_display_backend() == DISPLAY_SH1106_SPI);
+  assert(worker_display_is_sh1106());
+  assert(worker_display_uses_spi());
+  assert(strcmp(worker_display_backend_name(), "sh1106-spi") == 0);
 
   char *separate_arguments[] = {"virtual-trezor-worker", "--i2c-display",
                                 "ssd1306"};
   assert(worker_config_parse(3, separate_arguments, error, sizeof(error)));
-  assert(worker_i2c_display_controller() == I2C_DISPLAY_SSD1306);
-  assert(strcmp(worker_i2c_display_controller_name(), "ssd1306") == 0);
+  assert(worker_display_backend() == DISPLAY_SSD1306_I2C);
+  assert(strcmp(worker_display_backend_name(), "ssd1306-i2c") == 0);
 
   char *bad_arguments[] = {"virtual-trezor-worker",
                            "--i2c-display=unknown"};
@@ -95,8 +107,18 @@ int main(void) {
   assert(!worker_config_parse(2, missing_arguments, error, sizeof(error)));
   assert(strstr(error, "requires a value") != NULL);
 
+  char *bad_display_arguments[] = {"virtual-trezor-worker",
+                                   "--display=unknown"};
+  assert(!worker_config_parse(2, bad_display_arguments, error, sizeof(error)));
+  assert(strstr(error, "unsupported --display backend") != NULL);
+
+  char *missing_display_arguments[] = {"virtual-trezor-worker", "--display"};
+  assert(!worker_config_parse(2, missing_display_arguments, error,
+                              sizeof(error)));
+  assert(strstr(error, "requires a value") != NULL);
+
   char *duplicate_arguments[] = {"virtual-trezor-worker",
-                                 "--i2c-display=ssd1306",
+                                 "--display=ssd1306-i2c",
                                  "--i2c-display=sh1106"};
   assert(!worker_config_parse(3, duplicate_arguments, error, sizeof(error)));
   assert(strstr(error, "only once") != NULL);

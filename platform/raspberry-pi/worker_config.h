@@ -7,13 +7,16 @@
 #include <stddef.h>
 
 typedef enum {
-  I2C_DISPLAY_SSD1306,
-  I2C_DISPLAY_SH1106,
-} i2c_display_controller_t;
+  DISPLAY_SSD1306_I2C,
+  DISPLAY_SH1106_I2C,
+  DISPLAY_SH1106_SPI,
+} display_backend_t;
 
 bool worker_config_parse(int argc, char *const argv[], char *error,
                          size_t error_size);
-i2c_display_controller_t worker_i2c_display_controller(void);
-const char *worker_i2c_display_controller_name(void);
+display_backend_t worker_display_backend(void);
+bool worker_display_is_sh1106(void);
+bool worker_display_uses_spi(void);
+const char *worker_display_backend_name(void);
 
 #endif

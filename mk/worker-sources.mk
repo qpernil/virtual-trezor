@@ -27,7 +27,7 @@ UPSTREAM_EMULATOR_TO_RETAIN := \
 PI_INITIAL_PLATFORM_TO_PROVIDE := \
 	platform/raspberry-pi/usb_functionfs.c \
 	platform/raspberry-pi/buttons_gpio.c \
-	platform/raspberry-pi/display_i2c.c \
+	platform/raspberry-pi/display_linux.c \
 	platform/raspberry-pi/worker_main.c \
 	platform/raspberry-pi/worker_config.c \
 	platform/raspberry-pi/sh1106_stream.c \

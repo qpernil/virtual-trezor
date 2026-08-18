@@ -47,7 +47,7 @@ The principal platform milestones now work:
   pinned upstream checkout and passes a startup smoke test on macOS arm64;
 - an aarch64 Raspberry Pi worker builds and runs that firmware behind the USB
   gadget supervisor, replacing UDP, desktop display, and desktop input with
-  FunctionFS, I2C, and GPIO implementations.
+  FunctionFS, I2C/SPI, and GPIO implementations.
 
 The Pi was recognized by macOS as USB `1209:53c1`. The pinned Trezor host
 library opened it, read a model `1` firmware `1.14.1` `Features` response, and
@@ -61,30 +61,30 @@ replacing the Raspberry Pi hardware boundary:
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
   the generic OLED framebuffer, file-backed flash, timer, and randomness;
 - exclude both UDP source files and the upstream SDL display/button objects;
-- supply FunctionFS USB, supervisor-control, I2C display, and active-low GPIO
-  button implementations from `platform/raspberry-pi`;
-- send the unchanged framebuffer to a selectable SSD1306 or SH1106 display at
-  I2C address `0x3c` through the supervisor-opened `/dev/i2c-1`;
+- supply FunctionFS USB, supervisor-control, Linux display, and active-low
+  GPIO button implementations from `platform/raspberry-pi`;
+- send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
+  address `0x3c` or to a factory-configured SH1106 SPI HAT;
 - do not patch the upstream submodule.
 
 Trezor Suite recognizes the worker and reaches its firmware-check and
 on-device confirmation workflow; complete setup/recovery validation remains.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
 interface, so the separate U2F HID interface is also pending. A real Trezor
-One uses SPI for its OLED; I2C is an intentional Raspberry Pi platform
-adaptation that retains the
-genuine upstream framebuffer and UI composition rather than reproducing the
-original electrical display bus.
+One uses SPI for its OLED. The physical-HAT backend therefore preserves that
+transport style, while I2C remains an intentional Raspberry Pi adaptation for
+the virtual display and future I2C-native modules. Both retain the genuine
+upstream framebuffer and UI composition.
 
-The checked-in profile declares `/dev/i2c-1` and `/dev/gpiochip0` as required
-supervisor resources. Select `ssd1306` or `sh1106` with the worker's
-`--i2c-display` argument; the profile selects SH1106 for the validated setup.
-SH1106 mode pulses GPIO25 reset, while the two active-low firmware buttons are
-read on GPIO5 and GPIO26. Both physical display streams have been validated at
-400 kHz against the Pi 3 target driver. A transient I2C failure leaves USB
-running; the regular emulator poll path reinitializes the display after one
-second and retransmits the current framebuffer. A second Pi can receive that
-real bus traffic through
+The checked-in I2C profile declares `/dev/i2c-1` and `/dev/gpiochip0`; the SPI
+profile instead declares `/dev/spidev0.0` and `/dev/gpiochip0`. The worker's
+`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option selects the backend.
+SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.
+The two active-low firmware buttons are read on GPIO5 and GPIO26. Both I2C
+display streams have been validated at 400 kHz against the Pi 3 target driver.
+A transient display failure leaves USB running; the regular emulator poll
+path reinitializes the display after one second and retransmits the current
+framebuffer. A second Pi can receive the I2C traffic through
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
 reconstruct the display, render it through SDL, and drive the worker's two
 button GPIO inputs from mouse presses. See
@@ -134,8 +134,8 @@ PROTOC_BIN=/path/to/protoc-33.5 make upstream-baseline
 ```
 
 The baseline target is diagnostic only and still uses upstream SDL/UDP. On
-Linux, `make worker` builds the headless FunctionFS/I2C/GPIO worker; it links
-neither upstream UDP nor SDL display/button implementations.
+Linux, `make worker` builds the headless FunctionFS/I2C/SPI/GPIO worker; it
+links neither upstream UDP nor SDL display/button implementations.
 
 ## Documentation
 

@@ -35,8 +35,8 @@ platform_buttons.o: $(PROJECT_ROOT)/platform/raspberry-pi/buttons_gpio.c
 	@printf "  CC      %s (GPIO buttons replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -MMD -MP -o $@ -c $<
 
-platform_display.o: $(PROJECT_ROOT)/platform/raspberry-pi/display_i2c.c
-	@printf "  CC      %s (I2C display replacement)\n" "$@"
+platform_display.o: $(PROJECT_ROOT)/platform/raspberry-pi/display_linux.c
+	@printf "  CC      %s (Linux display replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<
 

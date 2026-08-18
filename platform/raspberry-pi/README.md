@@ -13,7 +13,7 @@ The current replacement surface is:
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; FunctionFS descriptors/endpoints and supervisor lifecycle |
 | `buttons_gpio.c` | `buttonRead`; active-low GPIO5 and GPIO26 inputs for No and Yes |
-| `display_i2c.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over an inherited I2C descriptor |
+| `display_linux.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over inherited I2C or SPI descriptors |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
@@ -40,24 +40,28 @@ on a bounded queue signaled by `eventfd`. The firmware thread therefore
 continues to refresh the I2C display and sample buttons while host software
 waits for an on-device confirmation.
 
-The profile declares `/dev/i2c-1` as the required `display-i2c` resource. The
-supervisor opens it while privileged and passes its descriptor as
+The I2C profile declares `/dev/i2c-1` as its required `display-i2c` resource.
+The supervisor opens it while privileged and passes its descriptor as
 `USB_GADGET_RESOURCE_DISPLAY_I2C_FD`; the worker selects address `0x3c` and
-performs all device-specific transactions after privilege drop. The
-`--i2c-display=ssd1306|sh1106` worker argument selects the protocol explicitly;
-the controllers cannot be distinguished by address probing because both
-normally use `0x3c`.
+performs all device-specific transactions after privilege drop. The SPI
+profile similarly exports `/dev/spidev0.0` as
+`USB_GADGET_RESOURCE_DISPLAY_SPI_FD`. The
+`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option selects the backend
+explicitly; the two I2C controllers cannot be distinguished by probing because
+both normally use `0x3c`.
 
 The required `display-gpio` resource passes `/dev/gpiochip0` as
 `USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. SH1106 initialization requests GPIO25
-and performs the vendor reset pulse. The button backend requests GPIO5 and
-GPIO26 as pull-up inputs from the same GPIO chip. Missing resources are fatal;
-an I2C transfer failure is logged without terminating USB service. The regular
-firmware `emulatorPoll` path retries after one second, reinitializes the display,
-and retransmits the current framebuffer even when the UI produces no later
-refresh.
+and performs the vendor reset pulse. SPI mode also requests GPIO24 to select
+command or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0
+drive chip select. The button backend requests GPIO5 and GPIO26 as pull-up
+inputs from the same GPIO chip. Missing resources are fatal; a transfer failure
+is logged without terminating USB service. The regular firmware `emulatorPoll`
+path retries after one second, reinitializes the display, and retransmits the
+current framebuffer even when the UI produces no later refresh.
 
-The original Trezor One OLED transport is SPI. The I2C backend is a Pi
-platform adaptation around the unchanged upstream framebuffer, not an attempt
-to reproduce the original board-level display wiring. See
+The original Trezor One OLED transport is SPI. The SH1106 SPI HAT is not the
+original display controller, but it preserves the four-wire transport style.
+The I2C backend remains a Pi platform adaptation around the same unchanged
+upstream framebuffer. See
 [`../../docs/i2c-display-plan.md`](../../docs/i2c-display-plan.md).

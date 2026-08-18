@@ -3,9 +3,10 @@
 ## Process boundary
 
 `usb-gadget-supervisor` creates the USB gadget, mounts FunctionFS, opens any
-declared I2C/GPIO resources, drops privileges, and launches this worker. The
-worker publishes its FunctionFS descriptors and owns all USB endpoint traffic.
-The supervisor does not interpret Trezor messages or proxy secret material.
+declared I2C/SPI/GPIO resources, drops privileges, and launches this worker.
+The worker publishes its FunctionFS descriptors and owns all USB endpoint
+traffic. The supervisor does not interpret Trezor messages or proxy secret
+material.
 
 A Pi currently provides one usable USB device controller. The supervisor can
 therefore select a Virtual Trezor or Virtual YubiKey profile, but it cannot
@@ -30,14 +31,15 @@ display refresh:
 
 The Pi worker excludes `legacy/emulator/oled.c`. Project-owned `oledInit` and
 `oledRefresh` implementations send the existing framebuffer directly to an
-explicitly selected SSD1306 or SH1106 controller through an inherited I2C
-descriptor. `emulatorPoll` remains a platform ABI symbol because the upstream
-firmware loop calls it in emulator builds. In this implementation it retries a
-failed display transfer after one second, reinitializing the controller and
-retransmitting the current framebuffer independently of later UI changes. The
-project-owned worker entry point parses the display selection before calling
-the renamed, otherwise unmodified upstream firmware entry point. I2C is a Pi
-platform choice, not a claim that the original Trezor One display bus is I2C.
+explicitly selected SSD1306 or SH1106 controller through an inherited I2C or
+SPI descriptor. `emulatorPoll` remains a platform ABI symbol because the
+upstream firmware loop calls it in emulator builds. In this implementation it
+retries a failed display transfer after one second, reinitializing the
+controller and retransmitting the current framebuffer independently of later
+UI changes. The project-owned worker entry point parses the display selection
+before calling the renamed, otherwise unmodified upstream firmware entry
+point. I2C is a Pi virtual-display choice; the factory SH1106 HAT uses the
+four-wire SPI backend.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies
@@ -77,7 +79,8 @@ in the worker.
    SH1106 I2C stream, with GPIO-backed buttons. Unit, full-worker, target
    electrical, second-Pi rendering, interactive-button, and 400 kHz
    oscilloscope validation pass.
-4. **Pending:** attach and validate the physical OLED/button HAT.
+4. **In progress:** the same SH1106 stream has a factory-HAT SPI transport;
+   build validation precedes physical OLED/button-HAT validation.
 
 The detailed display stages and the Pi 4 controller-clock finding are in
 [`i2c-display-plan.md`](i2c-display-plan.md).

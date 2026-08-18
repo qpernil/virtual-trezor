@@ -17,7 +17,7 @@ max_power_ma = 100
 
 [worker]
 command = "/home/per/virtual-trezor/build/virtual-trezor-worker"
-arguments = ["--i2c-display=sh1106"]
+arguments = ["--display=sh1106-i2c"]
 run_as = "per"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor"
