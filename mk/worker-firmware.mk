@@ -1,45 +1,61 @@
 # Overlay for the upstream legacy firmware Makefile.
 #
 # Run from upstream/trezor-firmware/legacy/firmware. The included upstream
-# Makefile still selects and builds every genuine firmware object; this one
-# explicit rules replace the USB transport and wrap the SDL display with the
-# optional I2C mirror without changing the upstream checkout.
+# Makefile still selects and builds every genuine firmware object; these
+# explicit rules replace USB, display, and buttons without changing upstream.
 
 WORKER_OVERLAY := $(lastword $(MAKEFILE_LIST))
 PROJECT_ROOT := $(abspath $(dir $(WORKER_OVERLAY))/..)
 
 include Makefile
 
+SDL_CFLAGS := $(shell pkg-config --cflags sdl2 SDL2_image 2>/dev/null)
+SDL_LDLIBS := $(shell pkg-config --libs sdl2 SDL2_image 2>/dev/null)
+CFLAGS := $(filter-out $(SDL_CFLAGS),$(CFLAGS))
+LDLIBS := $(filter-out $(SDL_LDLIBS),$(LDLIBS))
 CFLAGS += -pthread
 LDFLAGS += -pthread
-OBJS += platform_buttons.o platform_display.o platform_sdl_oled.o \
+OBJS += platform_buttons.o platform_display.o platform_main.o \
+	platform_worker_config.o platform_sh1106_stream.o \
 	platform_ssd1306_stream.o
 
-$(NAME).elf: platform_buttons.o platform_display.o platform_sdl_oled.o \
+$(NAME).elf: platform_buttons.o platform_display.o platform_main.o \
+	platform_worker_config.o platform_sh1106_stream.o \
 	platform_ssd1306_stream.o
+
+trezor.o: trezor.c
+	@printf "  CC      %s (renamed upstream entry point)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -Dmain=trezorFirmwareMain -MMD -MP -o $@ -c $<
 
 udp.o: $(PROJECT_ROOT)/platform/raspberry-pi/usb_functionfs.c
 	@printf "  CC      %s (FunctionFS replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -MMD -MP -o $@ -c $<
 
-platform_buttons.o: $(PROJECT_ROOT)/platform/raspberry-pi/buttons_sdl.c
-	@printf "  CC      %s (SDL buttons replacement)\n" "$@"
+platform_buttons.o: $(PROJECT_ROOT)/platform/raspberry-pi/buttons_gpio.c
+	@printf "  CC      %s (GPIO buttons replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -MMD -MP -o $@ -c $<
 
-platform_display.o: $(PROJECT_ROOT)/platform/raspberry-pi/display_i2c_sdl.c
-	@printf "  CC      %s (SDL and I2C display wrapper)\n" "$@"
+platform_display.o: $(PROJECT_ROOT)/platform/raspberry-pi/display_i2c.c
+	@printf "  CC      %s (I2C display replacement)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I. -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<
 
-platform_sdl_oled.o: $(PROJECT_ROOT)/upstream/trezor-firmware/legacy/emulator/oled.c
-	@printf "  CC      %s (renamed upstream SDL renderer)\n" "$@"
-	$(Q)$(CC) $(CFLAGS) -I. \
-		-DoledInit=sdlOledInit \
-		-DoledRefresh=sdlOledRefresh \
-		-DemulatorPoll=sdlEmulatorPoll \
+platform_main.o: $(PROJECT_ROOT)/platform/raspberry-pi/worker_main.c
+	@printf "  CC      %s (worker entry point)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
+		-MMD -MP -o $@ -c $<
+
+platform_worker_config.o: $(PROJECT_ROOT)/platform/raspberry-pi/worker_config.c
+	@printf "  CC      %s (worker configuration)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<
 
 platform_ssd1306_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/ssd1306_stream.c
 	@printf "  CC      %s (SSD1306 stream)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
+		-MMD -MP -o $@ -c $<
+
+platform_sh1106_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/sh1106_stream.c
+	@printf "  CC      %s (SH1106 stream)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<

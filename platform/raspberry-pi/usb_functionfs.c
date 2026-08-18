@@ -14,7 +14,6 @@
 #include <limits.h>
 #include <poll.h>
 #include <pthread.h>
-#include <pwd.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -146,30 +145,6 @@ static void set_worker_environment(void) {
     _exit(1);
   }
 
-  uid_t uid = geteuid();
-  char runtime[64];
-  if (snprintf(runtime, sizeof(runtime), "/run/user/%lu",
-               (unsigned long)uid) >= (int)sizeof(runtime)) {
-    _exit(1);
-  }
-  (void)setenv("XDG_RUNTIME_DIR", runtime, 0);
-  (void)setenv("DISPLAY", ":0", 0);
-  (void)setenv("SDL_VIDEODRIVER", "x11", 0);
-  // Labwc's Xwayland can publish a stale RANDR output while displays change.
-  // SDL's asynchronous RRGetOutputInfo request then terminates the worker with
-  // BadRROutput. The emulator needs only one fixed-size window, not RANDR.
-  (void)setenv("SDL_VIDEO_X11_XRANDR", "0", 1);
-  (void)setenv("TREZOR_OLED_SCALE", "2", 0);
-  (void)setenv("TREZOR_OLED_FULLSCREEN", "0", 0);
-
-  struct passwd *account = getpwuid(uid);
-  if (account != NULL && account->pw_dir != NULL) {
-    char authority[PATH_MAX];
-    if (snprintf(authority, sizeof(authority), "%s/.Xauthority",
-                 account->pw_dir) < (int)sizeof(authority)) {
-      (void)setenv("XAUTHORITY", authority, 0);
-    }
-  }
 }
 
 static void push_u16_le(uint8_t *buffer, size_t *position, uint16_t value) {

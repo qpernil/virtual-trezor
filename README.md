@@ -29,8 +29,8 @@ make init
 make check
 ```
 
-The FunctionFS worker must be built on Linux with SDL2, SDL2_image, `uv`, and
-the exact protobuf compiler required by the pinned firmware release:
+The FunctionFS worker must be built on Linux with a C toolchain, `uv`, and the
+exact protobuf compiler required by the pinned firmware release:
 
 ```sh
 PROTOC_BIN=/path/to/protoc-33.5 make worker
@@ -41,12 +41,13 @@ installation, profile customization, and USB gadget startup.
 
 ## Current status
 
-Two milestones now work:
+The principal platform milestones now work:
 
 - the official Trezor One `legacy/v1.14.1` emulator builds from an unmodified,
   pinned upstream checkout and passes a startup smoke test on macOS arm64;
 - an aarch64 Raspberry Pi worker builds and runs that firmware behind the USB
-  gadget supervisor, replacing UDP with FunctionFS while retaining the SDL UI.
+  gadget supervisor, replacing UDP, desktop display, and desktop input with
+  FunctionFS, I2C, and GPIO implementations.
 
 The Pi was recognized by macOS as USB `1209:53c1`. The pinned Trezor host
 library opened it, read a model `1` firmware `1.14.1` `Features` response, and
@@ -54,36 +55,34 @@ completed a 173-byte multi-packet ping. See
 [`docs/upstream-baseline.md`](docs/upstream-baseline.md) and
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md).
 
-The current worker deliberately keeps the proven emulator UI and host support
-while changing only the transport boundary:
+The current worker keeps upstream UI composition and host support while
+replacing the Raspberry Pi hardware boundary:
 
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
-  the generic OLED framebuffer, SDL display, file-backed flash, timer, and
-  randomness;
-- exclude both UDP source files;
-- supply FunctionFS USB, supervisor-control, and practical SDL keyboard/mouse
+  the generic OLED framebuffer, file-backed flash, timer, and randomness;
+- exclude both UDP source files and the upstream SDL display/button objects;
+- supply FunctionFS USB, supervisor-control, I2C display, and active-low GPIO
   button implementations from `platform/raspberry-pi`;
-- mirror the same framebuffer to an SSD1306-compatible display at I2C address
-  `0x3c` when the supervisor supplies `/dev/i2c-1`;
+- send the unchanged framebuffer to a selectable SSD1306 or SH1106 display at
+  I2C address `0x3c` through the supervisor-opened `/dev/i2c-1`;
 - do not patch the upstream submodule.
 
 Trezor Suite recognizes the worker and reaches its firmware-check and
 on-device confirmation workflow; complete setup/recovery validation remains.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
-interface, so the separate U2F HID interface is also pending. After that
-compatibility work, the next platform milestone replaces SDL display/buttons
-with an I2C OLED backend and GPIO drivers. A real Trezor One uses SPI for its
+interface, so the separate U2F HID interface is also pending. A real Trezor
+One uses SPI for its
 OLED; I2C is an intentional Raspberry Pi platform adaptation that retains the
 genuine upstream framebuffer and UI composition rather than reproducing the
 original electrical display bus.
 
-The first I2C milestone is implemented: the checked-in profile declares
-`/dev/i2c-1` as an optional supervisor resource, and each SDL refresh is also
-emitted as SSD1306 commands plus the unchanged 1,024-byte framebuffer. If the
-resource is absent or a transfer fails, the SDL display and USB worker keep
-running. The physical stream has been validated at 400 kHz against two Pi 3
-targets with zero receive overruns or dropped transactions. A second Pi can
-receive that real bus traffic through
+The checked-in profile declares `/dev/i2c-1` and `/dev/gpiochip0` as required
+supervisor resources. Select `ssd1306` or `sh1106` with the worker's
+`--i2c-display` argument; the profile selects SH1106 for the validated setup.
+SH1106 mode pulses GPIO25 reset, while the two active-low firmware buttons are
+read on GPIO5 and GPIO26. Both physical display streams have been validated at
+400 kHz against the Pi 3 target driver. A second Pi can receive that real bus
+traffic through
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
 reconstruct the display, and render it for validation before physical display
 hardware is attached. See
@@ -131,9 +130,9 @@ make init-baseline
 PROTOC_BIN=/path/to/protoc-33.5 make upstream-baseline
 ```
 
-The baseline target is diagnostic only. On Linux, `make worker` builds the
-FunctionFS worker. It keeps SDL but does not link either upstream UDP
-implementation. The later hardware-UI target will also remove SDL.
+The baseline target is diagnostic only and still uses upstream SDL/UDP. On
+Linux, `make worker` builds the headless FunctionFS/I2C/GPIO worker; it links
+neither upstream UDP nor SDL display/button implementations.
 
 ## Documentation
 
