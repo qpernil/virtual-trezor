@@ -63,9 +63,9 @@ that every write is a complete frame.
 The worker option `--i2c-display=ssd1306|sh1106` selects the stream. Explicit
 selection is required because both controllers normally acknowledge address
 `0x3c` and provide no useful identification query. The checked-in profile
-defaults to SSD1306. The Waveshare 1.3-inch OLED HAT uses SH1106; its reset is
-GPIO25, requested through the required supervisor-opened `/dev/gpiochip0`
-resource.
+selects SH1106 for the validated Waveshare 1.3-inch OLED HAT setup; change it
+to SSD1306 for that controller family. SH1106 reset is GPIO25, requested
+through the required supervisor-opened `/dev/gpiochip0` resource.
 
 The upstream framebuffer has the ordering used by the original OLED setup.
 The I2C backend and target renderer were compared against the upstream SDL
