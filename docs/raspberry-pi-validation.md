@@ -8,7 +8,7 @@
 | Host | Raspberry Pi, aarch64 |
 | OS | Debian GNU/Linux 13 (trixie) |
 | Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Worker SHA-256 | `2cf48bffe434806d0dc187ac1e23138dc473267b469d4dcd8eaf2ee4f8ef7401` |
+| Worker SHA-256 | `c2862d104a1cb79de4c69c9c0f1d990e0df5e49f5ee2707114ad1d5974e8f3c2` |
 | Supervisor service | `usb-gadget-supervisor@virtual-trezor.service` |
 | USB device controller | `fe980000.usb`, state `configured` |
 | FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
@@ -70,6 +70,13 @@ After deployment of the headless worker, host discovery again reported the
 Trezor One over WebUSB and a fresh `headless-i2c-gpio-ok` ping round-tripped
 unchanged. The SH1106 target renderer received 121 complete startup frames,
 with no local display process in the worker.
+
+Display recovery was fault-injected by removing the Pi 3 I2C target before
+worker startup. The worker logged an initialization `EIO` while FunctionFS and
+USB still attached normally. When the target was restored 21 seconds later,
+`emulatorPoll` reinitialized SH1106 without a worker restart or a new UI
+refresh. The target received exactly 1,092 bytes: 28 initialization bytes plus
+one complete 1,064-byte framebuffer, with zero receive overruns or ring drops.
 
 The deployed adapter was subsequently tested against the host lifecycle used
 by Trezor Suite. A challenged `GetFirmwareHash` returned 32 bytes in 0.246

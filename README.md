@@ -81,8 +81,10 @@ supervisor resources. Select `ssd1306` or `sh1106` with the worker's
 `--i2c-display` argument; the profile selects SH1106 for the validated setup.
 SH1106 mode pulses GPIO25 reset, while the two active-low firmware buttons are
 read on GPIO5 and GPIO26. Both physical display streams have been validated at
-400 kHz against the Pi 3 target driver. A second Pi can receive that real bus
-traffic through
+400 kHz against the Pi 3 target driver. A transient I2C failure leaves USB
+running; the regular emulator poll path reinitializes the display after one
+second and retransmits the current framebuffer. A second Pi can receive that
+real bus traffic through
 [`raspberry-pi-i2c-target`](https://github.com/qpernil/raspberry-pi-i2c-target),
 reconstruct the display, render it through SDL, and drive the worker's two
 button GPIO inputs from mouse presses. See
