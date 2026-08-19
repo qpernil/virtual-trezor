@@ -28,6 +28,7 @@ check-worker-boundary:
 	@grep -q 'USB_GADGET_RESOURCE_DISPLAY_SPI_FD' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_ST7789_SPI' platform/raspberry-pi/worker_config.h
 	@grep -q 'platform_st7789.o' mk/worker-firmware.mk
+	@test -x tools/protoc
 	@! grep -R -q '#include <SDL' platform/raspberry-pi/buttons_gpio.c \
 		platform/raspberry-pi/display_linux.c
 	@! grep -q 'platform_sdl\|emulator/oled.c' mk/worker-firmware.mk
