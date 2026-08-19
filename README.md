@@ -32,11 +32,12 @@ make init
 make check
 ```
 
-The FunctionFS worker must be built on Linux with a C toolchain, `uv`, and the
-exact protobuf compiler required by the pinned firmware release:
+The FunctionFS worker must be built on Linux with a C toolchain and `uv`.
+The build obtains the matching protobuf compiler through pinned
+`grpcio-tools==1.81.0` package metadata:
 
 ```sh
-PROTOC_BIN=/path/to/protoc-33.5 make worker
+make worker
 ```
 
 The default runtime arrangement is a factory-configured SH1106 SPI HAT on the
@@ -141,12 +142,12 @@ secp256k1-zkp. The retained emulator setup object also includes a libopencm3
 flash header, without linking that library. The monorepo's locked `uv`
 environment additionally requires the unlinked `ts-tvl` Python package.
 
-The optional upstream emulator baseline additionally needs SDL2, SDL2_image,
-and an exactly compatible `protoc`:
+The optional upstream emulator baseline additionally needs SDL2 and
+SDL2_image. It uses the same package-managed protobuf compiler as the worker:
 
 ```sh
 make init-baseline
-PROTOC_BIN=/path/to/protoc-33.5 make upstream-baseline
+make upstream-baseline
 ```
 
 The baseline target is diagnostic only and still uses upstream SDL/UDP. On

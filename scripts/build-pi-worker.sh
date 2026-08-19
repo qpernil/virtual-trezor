@@ -4,7 +4,9 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 LEGACY_DIR="$UPSTREAM_DIR/legacy"
-PROTOC_BIN="${PROTOC_BIN:-$(command -v protoc || true)}"
+PROTOC_TOOL="grpcio-tools==1.81.0"
+PROTOC_ENTRYPOINT="python-grpc-tools-protoc"
+PROTOC_COMMAND="uv tool run --quiet --from $PROTOC_TOOL $PROTOC_ENTRYPOINT"
 
 if [[ "$(uname -s)" != Linux ]]; then
   echo "The FunctionFS worker build requires Linux." >&2
@@ -20,20 +22,16 @@ for tool in make pkg-config uv ar; do
   fi
 done
 
-if [[ -z "$PROTOC_BIN" || ! -x "$PROTOC_BIN" ]]; then
-  echo "Set PROTOC_BIN to an executable protoc 33.5 binary." >&2
-  exit 1
-fi
-if [[ "$("$PROTOC_BIN" --version)" != "libprotoc 33.5" ]]; then
-  echo "Trezor v1.14.1 requires protoc 33.5; found: $("$PROTOC_BIN" --version)" >&2
+PROTOC_VERSION="$(uv tool run --quiet --from "$PROTOC_TOOL" "$PROTOC_ENTRYPOINT" --version)"
+if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
+  echo "Trezor v1.14.1 requires protoc 33.5; $PROTOC_TOOL provides: $PROTOC_VERSION" >&2
   exit 1
 fi
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 
-TOOL_BIN="$PROJECT_ROOT/build/upstream-tools/bin"
-mkdir -p "$TOOL_BIN" "$PROJECT_ROOT/build"
-ln -sfn "$PROTOC_BIN" "$TOOL_BIN/protoc"
-export PATH="$TOOL_BIN:$UPSTREAM_DIR/.venv/bin:$PATH"
+mkdir -p "$PROJECT_ROOT/build"
+export PATH="$UPSTREAM_DIR/.venv/bin:$PATH"
+export PROTOC="$PROTOC_COMMAND"
 export EMULATOR=1
 export DEBUG_LINK=0
 

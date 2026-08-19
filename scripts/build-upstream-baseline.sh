@@ -4,7 +4,9 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 LEGACY_DIR="$UPSTREAM_DIR/legacy"
-PROTOC_BIN="${PROTOC_BIN:-$(command -v protoc || true)}"
+PROTOC_TOOL="grpcio-tools==1.81.0"
+PROTOC_ENTRYPOINT="python-grpc-tools-protoc"
+PROTOC_COMMAND="uv tool run --quiet --from $PROTOC_TOOL $PROTOC_ENTRYPOINT"
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
 
@@ -15,13 +17,9 @@ for tool in make pkg-config uv; do
   fi
 done
 
-if [[ -z "$PROTOC_BIN" || ! -x "$PROTOC_BIN" ]]; then
-  echo "Set PROTOC_BIN to an executable protoc 33.5 binary." >&2
-  exit 1
-fi
-
-if [[ "$("$PROTOC_BIN" --version)" != "libprotoc 33.5" ]]; then
-  echo "Trezor v1.14.1 requires protoc 33.5; found: $("$PROTOC_BIN" --version)" >&2
+PROTOC_VERSION="$(uv tool run --quiet --from "$PROTOC_TOOL" "$PROTOC_ENTRYPOINT" --version)"
+if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
+  echo "Trezor v1.14.1 requires protoc 33.5; $PROTOC_TOOL provides: $PROTOC_VERSION" >&2
   exit 1
 fi
 
@@ -35,10 +33,6 @@ if [[ ! -e "$UPSTREAM_DIR/vendor/libopencm3/.git" ]]; then
   exit 1
 fi
 
-TOOL_BIN="$PROJECT_ROOT/build/upstream-tools/bin"
-mkdir -p "$TOOL_BIN"
-ln -sfn "$PROTOC_BIN" "$TOOL_BIN/protoc"
-
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 make -C "$LEGACY_DIR/firmware/protob" clean
 
@@ -48,7 +42,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 env \
-  PATH="$TOOL_BIN:$PATH" \
+  PROTOC="$PROTOC_COMMAND" \
   CFLAGS="$HOST_CFLAGS" \
   EMULATOR=1 \
   DEBUG_LINK=1 \
