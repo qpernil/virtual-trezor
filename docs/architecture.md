@@ -44,8 +44,10 @@ four-wire SPI backend, which is the worker default.
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies
 only `buttonRead`, sampling active-low GPIO5 and GPIO26 through the
-supervisor-opened GPIO chip descriptor. The same two lines may be driven by
-physical buttons or by the remote virtual-display process.
+supervisor-opened GPIO chip descriptor. On the physical HAT, active-low GPIO13
+maps the joystick center press to both logical Trezor buttons. The original two
+lines may instead be driven by the remote virtual-display process, whose
+middle click pulls both low.
 
 USB has two emulator-specific layers that must both be excluded:
 

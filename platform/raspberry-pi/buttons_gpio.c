@@ -13,11 +13,13 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "button_gpio_state.h"
 #include "buttons.h"
 
 #define DISPLAY_GPIO_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_GPIO_FD"
 #define BUTTON_NO_GPIO 5
 #define BUTTON_YES_GPIO 26
+#define BUTTON_CENTER_GPIO 13
 
 static int button_lines_fd = -1;
 
@@ -51,11 +53,11 @@ static void initialize_gpio_buttons(void) {
 
   int gpiochip_fd = required_fd_from_environment(DISPLAY_GPIO_FD_ENV);
   struct gpio_v2_line_request request = {
-      .offsets = {BUTTON_NO_GPIO, BUTTON_YES_GPIO},
+      .offsets = {BUTTON_NO_GPIO, BUTTON_YES_GPIO, BUTTON_CENTER_GPIO},
       .consumer = "virtual-trezor-buttons",
       .config.flags =
           GPIO_V2_LINE_FLAG_INPUT | GPIO_V2_LINE_FLAG_BIAS_PULL_UP,
-      .num_lines = 2,
+      .num_lines = 3,
   };
   if (ioctl(gpiochip_fd, GPIO_V2_GET_LINE_IOCTL, &request) != 0) {
     fail("request button GPIOs");
@@ -63,14 +65,15 @@ static void initialize_gpio_buttons(void) {
   button_lines_fd = request.fd;
   fprintf(stderr,
           "virtual-trezor: reading active-low buttons on GPIO%d (left/No) "
-          "and GPIO%d (right/Yes)\n",
-          BUTTON_NO_GPIO, BUTTON_YES_GPIO);
+          "GPIO%d (right/Yes), and GPIO%d (center/both)\n",
+          BUTTON_NO_GPIO, BUTTON_YES_GPIO, BUTTON_CENTER_GPIO);
 }
 
 uint16_t buttonRead(void) {
   initialize_gpio_buttons();
   struct gpio_v2_line_values values = {
-      .mask = 0x3,
+      .mask = BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE |
+              BUTTON_GPIO_CENTER_LINE,
   };
   int result;
   do {
@@ -80,11 +83,12 @@ uint16_t buttonRead(void) {
     fail("read button GPIOs");
   }
 
+  const uint8_t gpio_pressed = button_gpio_pressed(values.bits);
   uint16_t pressed = 0;
-  if ((values.bits & 0x1) == 0) {
+  if ((gpio_pressed & BUTTON_GPIO_NO_PRESSED) != 0) {
     pressed |= BTN_PIN_NO;
   }
-  if ((values.bits & 0x2) == 0) {
+  if ((gpio_pressed & BUTTON_GPIO_YES_PRESSED) != 0) {
     pressed |= BTN_PIN_YES;
   }
   return ~pressed;
