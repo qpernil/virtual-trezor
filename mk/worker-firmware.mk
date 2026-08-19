@@ -17,11 +17,11 @@ CFLAGS += -pthread
 LDFLAGS += -pthread
 OBJS += platform_buttons.o platform_display.o platform_main.o \
 	platform_worker_config.o platform_sh1106_stream.o \
-	platform_ssd1306_stream.o
+	platform_ssd1306_stream.o platform_st7789.o
 
 $(NAME).elf: platform_buttons.o platform_display.o platform_main.o \
 	platform_worker_config.o platform_sh1106_stream.o \
-	platform_ssd1306_stream.o
+	platform_ssd1306_stream.o platform_st7789.o
 
 trezor.o: trezor.c
 	@printf "  CC      %s (renamed upstream entry point)\n" "$@"
@@ -57,5 +57,10 @@ platform_ssd1306_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/ssd1306_stream.
 
 platform_sh1106_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/sh1106_stream.c
 	@printf "  CC      %s (SH1106 stream)\n" "$@"
+	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
+		-MMD -MP -o $@ -c $<
+
+platform_st7789.o: $(PROJECT_ROOT)/platform/raspberry-pi/st7789.c
+	@printf "  CC      %s (ST7789 stream)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<

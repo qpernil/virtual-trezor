@@ -9,7 +9,15 @@
 #include "button_gpio_state.h"
 #include "sh1106_stream.h"
 #include "ssd1306_stream.h"
+#include "st7789.h"
 #include "worker_config.h"
+
+static void set_legacy_pixel(uint8_t framebuffer[ST7789_SOURCE_FRAMEBUFFER_SIZE],
+                             uint16_t x, uint16_t y) {
+  size_t offset = ST7789_SOURCE_FRAMEBUFFER_SIZE - 1 - x -
+                  (size_t)(y / 8) * ST7789_SOURCE_WIDTH;
+  framebuffer[offset] |= (uint8_t)(1U << (7 - (y % 8)));
+}
 
 int main(void) {
   assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE |
@@ -83,6 +91,50 @@ int main(void) {
                   SH1106_WIDTH) == 0);
   }
 
+  size_t init_step_count = 0;
+  const st7789_init_step_t *init_steps =
+      st7789_init_steps(&init_step_count);
+  assert(init_step_count == 17);
+  assert(init_steps[0].command == 0x11);
+  assert(init_steps[0].delay_ms == 120);
+  assert(init_steps[2].command == 0x3a);
+  assert(init_steps[2].data_length == 1);
+  assert(init_steps[2].data[0] == 0x05);
+  assert(init_steps[init_step_count - 1].command == 0x29);
+
+  uint8_t column[4];
+  uint8_t row[4];
+  st7789_build_window_data(column, row, ST7789_RENDER_X, ST7789_RENDER_Y,
+                           ST7789_RENDER_WIDTH, ST7789_RENDER_HEIGHT);
+  static const uint8_t expected_column[] = {0x00, 0x00, 0x00, 0xef};
+  static const uint8_t expected_row[] = {0x00, 0x3c, 0x00, 0xb3};
+  assert(memcmp(column, expected_column, sizeof(column)) == 0);
+  assert(memcmp(row, expected_row, sizeof(row)) == 0);
+
+  uint8_t legacy_frame[ST7789_SOURCE_FRAMEBUFFER_SIZE] = {0};
+  for (uint16_t y = 0; y < ST7789_SOURCE_HEIGHT; ++y) {
+    for (uint16_t x = 0; x < ST7789_SOURCE_WIDTH; ++x) {
+      if (((x / 7) + (y / 5)) % 2 != 0) {
+        set_legacy_pixel(legacy_frame, x, y);
+      }
+    }
+  }
+  static uint8_t rgb_frame[ST7789_RENDER_BUFFER_SIZE];
+  st7789_encode_legacy_frame(rgb_frame, legacy_frame);
+  for (uint16_t y = 0; y < ST7789_RENDER_HEIGHT; ++y) {
+    uint16_t source_y =
+        (uint16_t)((uint32_t)y * ST7789_SOURCE_HEIGHT / ST7789_RENDER_HEIGHT);
+    for (uint16_t x = 0; x < ST7789_RENDER_WIDTH; ++x) {
+      uint16_t source_x = (uint16_t)((uint32_t)x * ST7789_SOURCE_WIDTH /
+                                     ST7789_RENDER_WIDTH);
+      uint8_t expected =
+          ((source_x / 7) + (source_y / 5)) % 2 != 0 ? 0xff : 0x00;
+      size_t output = ((size_t)y * ST7789_RENDER_WIDTH + x) * 2;
+      assert(rgb_frame[output] == expected);
+      assert(rgb_frame[output + 1] == expected);
+    }
+  }
+
   char error[160];
   char *default_arguments[] = {"virtual-trezor-worker"};
   assert(worker_config_parse(1, default_arguments, error, sizeof(error)));
@@ -90,6 +142,15 @@ int main(void) {
   assert(worker_display_is_sh1106());
   assert(worker_display_uses_spi());
   assert(strcmp(worker_display_backend_name(), "sh1106-spi") == 0);
+
+  char *st7789_arguments[] = {"virtual-trezor-worker",
+                              "--display=st7789-spi"};
+  assert(worker_config_parse(2, st7789_arguments, error, sizeof(error)));
+  assert(worker_display_backend() == DISPLAY_ST7789_SPI);
+  assert(!worker_display_is_sh1106());
+  assert(worker_display_is_st7789());
+  assert(worker_display_uses_spi());
+  assert(strcmp(worker_display_backend_name(), "st7789-spi") == 0);
 
   char *sh1106_arguments[] = {"virtual-trezor-worker",
                               "--display=sh1106-i2c"};
@@ -142,6 +203,7 @@ int main(void) {
   assert(!worker_config_parse(2, unknown_arguments, error, sizeof(error)));
   assert(strstr(error, "unknown worker argument") != NULL);
 
-  puts("Button mapping, SSD1306/SH1106 stream, and option tests passed.");
+  puts("Button mapping, SSD1306/SH1106/ST7789 stream, and option tests "
+       "passed.");
   return 0;
 }

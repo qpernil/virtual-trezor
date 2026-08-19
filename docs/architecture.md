@@ -40,6 +40,9 @@ UI changes. The project-owned worker entry point parses the display selection
 before calling the renamed, otherwise unmodified upstream firmware entry
 point. I2C is a Pi virtual-display choice; the factory SH1106 HAT uses the
 four-wire SPI backend, which is the worker default.
+The optional ST7789 backend converts the same completed 1-bit framebuffer to
+RGB565 and scales it to a centered 240x120 window on the 240x240 panel. It does
+not replace Trezor's own layout, font, bitmap, or drawing routines.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies

@@ -89,12 +89,20 @@ sudo install -o root -g root -m 0644 profiles/virtual-trezor-i2c.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
 ```
 
+Install the ST7789 profile for the Waveshare 1.3-inch 240x240 LCD HAT:
+
+```sh
+sudo install -o root -g root -m 0644 profiles/virtual-trezor-st7789.toml \
+  /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
+```
+
 The resulting choices are:
 
 | Supervisor instance | Display path | Worker argument |
 | --- | --- | --- |
 | `virtual-trezor` | Direct SH1106 over SPI0 | none; `sh1106-spi` is the default |
 | `virtual-trezor-i2c` | SH1106 over I2C1, including the second-Pi viewer | `--display=sh1106-i2c` |
+| `virtual-trezor-st7789` | Direct 240x240 ST7789 LCD over SPI0 | `--display=st7789-spi` |
 
 The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
 `/dev/i2c-1`; both declare `/dev/gpiochip0`. The supervisor opens the
@@ -112,8 +120,8 @@ normally use `0x3c`:
 arguments = ["--display=sh1106-i2c"]
 ```
 
-The available override values are `ssd1306-i2c`, `sh1106-i2c`, and
-`sh1106-spi`.
+The available override values are `ssd1306-i2c`, `sh1106-i2c`,
+`sh1106-spi`, and `st7789-spi`.
 SH1106 backends request GPIO25 and pulse reset before sending the initialization
 sequence. SPI additionally drives GPIO24 Data/Command and uses SPI0 CE0 for
 chip select. Firmware No/Yes input uses active-low GPIO5 and GPIO26 with
@@ -128,6 +136,7 @@ if the repository or unprivileged account is elsewhere:
 ```sh
 editor profiles/virtual-trezor.toml
 editor profiles/virtual-trezor-i2c.toml
+editor profiles/virtual-trezor-st7789.toml
 ```
 
 Confirm that the installed service template uses the same `/opt` layout:
@@ -147,6 +156,9 @@ sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
 sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --check-profile \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
+sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
+  --check-profile \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
 ```
 
 ## Physical SH1106 SPI HAT
@@ -185,6 +197,43 @@ sampled.
 The worker configures mode 0 at 4 MHz. Power down before fitting or removing
 the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring
 before installing the physical board.
+
+## Physical ST7789 SPI HAT
+
+The Waveshare 1.3-inch LCD + Joystick HAT uses a 240x240 RGB565 ST7789 panel.
+The legacy firmware still composes its genuine 128x64 monochrome framebuffer;
+the platform backend decodes that layout, scales it by 1.875 in both axes, and
+centers the resulting 240x120 image between 60-pixel black bands. It does not
+alter the upstream UI code.
+
+The HAT shares SPI0 and the joystick GPIOs with the OLED HAT, but its control
+pins differ:
+
+| Function | BCM GPIO | Physical pin |
+| --- | ---: | ---: |
+| SPI0 MOSI | 10 | 19 |
+| SPI0 SCLK | 11 | 23 |
+| SPI0 CE0 | 8 | 24 |
+| Data/Command | 25 | 22 |
+| Reset | 27 | 13 |
+| Backlight | 24 | 18 |
+| No/left | 5 | 29 |
+| Yes/right | 26 | 37 |
+| Both/joystick press | 13 | 33 |
+
+The backend uses SPI mode 0 at 32 MHz. To test only the panel wiring and the
+actual backend, without firmware, FunctionFS, or the supervisor, stop any
+gadget worker and run:
+
+```sh
+make st7789-test
+sudo ./build/st7789-test
+```
+
+The test clears and initializes the panel, draws a centered border/cross/bar
+pattern, and waits for Enter before releasing its GPIO lines. This is a direct
+hardware test, so it normally requires root unless local SPI/GPIO permissions
+have been configured.
 
 ## Optional second-Pi display and button bridge
 

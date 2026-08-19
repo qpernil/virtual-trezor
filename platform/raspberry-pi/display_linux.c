@@ -20,6 +20,7 @@
 #include "oled.h"
 #include "sh1106_stream.h"
 #include "ssd1306_stream.h"
+#include "st7789.h"
 #include "worker_config.h"
 
 #define DISPLAY_I2C_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_I2C_FD"
@@ -28,6 +29,11 @@
 #define SH1106_DC_GPIO 24
 #define SH1106_RESET_GPIO 25
 #define SH1106_SPI_SPEED_HZ 4000000U
+#define ST7789_DC_GPIO 25
+#define ST7789_RESET_GPIO 27
+#define ST7789_BACKLIGHT_GPIO 24
+#define ST7789_SPI_SPEED_HZ 32000000U
+#define SPI_WRITE_CHUNK_SIZE 4096
 #define RETRY_DELAY_MS 1000
 
 static int display_fd = -1;
@@ -36,7 +42,9 @@ static bool error_reported = false;
 static uint64_t retry_after_ms = 0;
 static int dc_line_fd = -1;
 static int reset_line_fd = -1;
+static int backlight_line_fd = -1;
 static bool reset_resource_checked = false;
+static uint8_t st7789_frame[ST7789_RENDER_BUFFER_SIZE];
 
 static uint64_t monotonic_ms(void) {
   struct timespec now;
@@ -90,6 +98,19 @@ static bool write_bytes(const uint8_t *message, size_t length) {
   return true;
 }
 
+static bool write_bytes_chunked(const uint8_t *message, size_t length) {
+  while (length > 0) {
+    size_t chunk = length < SPI_WRITE_CHUNK_SIZE ? length
+                                                : SPI_WRITE_CHUNK_SIZE;
+    if (!write_bytes(message, chunk)) {
+      return false;
+    }
+    message += chunk;
+    length -= chunk;
+  }
+  return true;
+}
+
 static bool set_output_line(int line_fd, bool high) {
   struct gpio_v2_line_values values = {
       .bits = high ? 1 : 0,
@@ -112,16 +133,30 @@ static int request_output_line(unsigned int offset, const char *consumer) {
   return request.fd;
 }
 
-static void pulse_sh1106_reset(void) {
+static unsigned int display_dc_gpio(void) {
+  return worker_display_is_st7789() ? ST7789_DC_GPIO : SH1106_DC_GPIO;
+}
+
+static unsigned int display_reset_gpio(void) {
+  return worker_display_is_st7789() ? ST7789_RESET_GPIO : SH1106_RESET_GPIO;
+}
+
+static uint32_t display_spi_speed_hz(void) {
+  return worker_display_is_st7789() ? ST7789_SPI_SPEED_HZ
+                                    : SH1106_SPI_SPEED_HZ;
+}
+
+static void pulse_display_reset(void) {
+  unsigned int reset_gpio = display_reset_gpio();
   if (!reset_resource_checked) {
     reset_resource_checked = true;
-    reset_line_fd = request_output_line(SH1106_RESET_GPIO,
+    reset_line_fd = request_output_line(reset_gpio,
                                         "virtual-trezor-reset");
     if (reset_line_fd < 0) {
       fprintf(stderr,
-              "virtual-trezor: cannot request SH1106 reset GPIO %d: %s; "
+              "virtual-trezor: cannot request %s reset GPIO %u: %s; "
               "relying on power-on reset\n",
-              SH1106_RESET_GPIO, strerror(errno));
+              worker_display_backend_name(), reset_gpio, strerror(errno));
     }
   }
 
@@ -129,8 +164,8 @@ static void pulse_sh1106_reset(void) {
     return;
   }
   if (!set_output_line(reset_line_fd, true)) {
-    fprintf(stderr, "virtual-trezor: cannot drive SH1106 reset GPIO: %s\n",
-            strerror(errno));
+    fprintf(stderr, "virtual-trezor: cannot drive %s reset GPIO: %s\n",
+            worker_display_backend_name(), strerror(errno));
     close(reset_line_fd);
     reset_line_fd = -1;
     return;
@@ -145,20 +180,35 @@ static void pulse_sh1106_reset(void) {
 static bool initialize_spi(void) {
   uint8_t mode = SPI_MODE_0;
   uint8_t bits_per_word = 8;
-  uint32_t speed_hz = SH1106_SPI_SPEED_HZ;
+  uint32_t speed_hz = display_spi_speed_hz();
   if (ioctl(display_fd, SPI_IOC_WR_MODE, &mode) != 0 ||
       ioctl(display_fd, SPI_IOC_WR_BITS_PER_WORD, &bits_per_word) != 0 ||
       ioctl(display_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed_hz) != 0) {
     return false;
   }
   if (dc_line_fd < 0) {
-    dc_line_fd =
-        request_output_line(SH1106_DC_GPIO, "virtual-trezor-display-dc");
+    dc_line_fd = request_output_line(display_dc_gpio(),
+                                     "virtual-trezor-display-dc");
     if (dc_line_fd < 0) {
       return false;
     }
   }
+  if (worker_display_is_st7789() && backlight_line_fd < 0) {
+    backlight_line_fd = request_output_line(ST7789_BACKLIGHT_GPIO,
+                                            "virtual-trezor-backlight");
+    if (backlight_line_fd < 0) {
+      return false;
+    }
+  }
   return set_output_line(dc_line_fd, false);
+}
+
+static bool write_spi_message(bool data, const uint8_t *message,
+                              size_t length) {
+  if (!set_output_line(dc_line_fd, data)) {
+    return false;
+  }
+  return write_bytes_chunked(message, length);
 }
 
 static bool write_sh1106_message(const uint8_t *message, size_t length) {
@@ -169,17 +219,70 @@ static bool write_sh1106_message(const uint8_t *message, size_t length) {
     errno = EINVAL;
     return false;
   }
-  if (!set_output_line(dc_line_fd, message[0] == 0x40)) {
+  return write_spi_message(message[0] == 0x40, message + 1, length - 1);
+}
+
+static bool write_st7789_command(uint8_t command) {
+  return write_spi_message(false, &command, 1);
+}
+
+static bool write_st7789_data(const uint8_t *data, size_t length) {
+  return length == 0 || write_spi_message(true, data, length);
+}
+
+static bool set_st7789_window(uint16_t x, uint16_t y, uint16_t width,
+                              uint16_t height) {
+  uint8_t column[4];
+  uint8_t row[4];
+  st7789_build_window_data(column, row, x, y, width, height);
+  return write_st7789_command(0x2a) &&
+         write_st7789_data(column, sizeof(column)) &&
+         write_st7789_command(0x2b) && write_st7789_data(row, sizeof(row)) &&
+         write_st7789_command(0x2c);
+}
+
+static bool clear_st7789(void) {
+  static const uint8_t black[SPI_WRITE_CHUNK_SIZE] = {0};
+  size_t remaining = ST7789_PANEL_WIDTH * ST7789_PANEL_HEIGHT * 2;
+  if (!set_st7789_window(0, 0, ST7789_PANEL_WIDTH, ST7789_PANEL_HEIGHT) ||
+      !set_output_line(dc_line_fd, true)) {
     return false;
   }
-  return write_bytes(message + 1, length - 1);
+  while (remaining > 0) {
+    size_t chunk = remaining < sizeof(black) ? remaining : sizeof(black);
+    if (!write_bytes(black, chunk)) {
+      return false;
+    }
+    remaining -= chunk;
+  }
+  return true;
+}
+
+static bool initialize_st7789(void) {
+  pulse_display_reset();
+  size_t count = 0;
+  const st7789_init_step_t *steps = st7789_init_steps(&count);
+  for (size_t index = 0; index < count; ++index) {
+    const st7789_init_step_t *step = &steps[index];
+    if (!write_st7789_command(step->command) ||
+        !write_st7789_data(step->data, step->data_length)) {
+      return false;
+    }
+    if (step->delay_ms != 0) {
+      usleep(step->delay_ms * 1000);
+    }
+  }
+  return clear_st7789() && set_output_line(backlight_line_fd, true);
 }
 
 static bool send_initialization(void) {
   size_t length = 0;
   const uint8_t *message;
+  if (worker_display_is_st7789()) {
+    return initialize_st7789();
+  }
   if (worker_display_is_sh1106()) {
-    pulse_sh1106_reset();
+    pulse_display_reset();
     message = sh1106_init_message(&length);
     if (!write_sh1106_message(message, length)) {
       return false;
@@ -224,7 +327,8 @@ static bool initialize_display(void) {
   if (worker_display_uses_spi()) {
     fprintf(stderr, "virtual-trezor: %s display %s at %u Hz\n",
             worker_display_backend_name(),
-            error_reported ? "recovered" : "ready", SH1106_SPI_SPEED_HZ);
+            error_reported ? "recovered" : "ready",
+            display_spi_speed_hz());
   } else {
     uint8_t address = worker_display_is_sh1106() ? SH1106_I2C_ADDRESS
                                                  : SSD1306_I2C_ADDRESS;
@@ -244,7 +348,14 @@ static void write_framebuffer(void) {
   }
 
   const uint8_t *framebuffer = oledGetBuffer();
-  if (worker_display_is_sh1106()) {
+  if (worker_display_is_st7789()) {
+    st7789_encode_legacy_frame(st7789_frame, framebuffer);
+    if (!set_st7789_window(ST7789_RENDER_X, ST7789_RENDER_Y,
+                           ST7789_RENDER_WIDTH, ST7789_RENDER_HEIGHT) ||
+        !write_st7789_data(st7789_frame, sizeof(st7789_frame))) {
+      report_error("ST7789 frame write");
+    }
+  } else if (worker_display_is_sh1106()) {
     uint8_t command[SH1106_PAGE_COMMAND_SIZE];
     uint8_t data[SH1106_PAGE_DATA_SIZE];
     for (uint8_t page = 0; page < SH1106_PAGE_COUNT; ++page) {

@@ -16,6 +16,7 @@ The current replacement surface is:
 | `display_linux.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over inherited I2C or SPI descriptors |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
+| `st7789.c` | ST7789 initialization, address-window encoding, and conversion of the legacy reverse-page framebuffer to centered 240x120 RGB565 pixels |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
 
 `usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`. It
@@ -47,7 +48,7 @@ performs all device-specific transactions after privilege drop. The SPI
 profile similarly exports `/dev/spidev0.0` as
 `USB_GADGET_RESOURCE_DISPLAY_SPI_FD`. The
 worker defaults to SH1106 SPI. The
-`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option overrides the backend;
+`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides the backend;
 the two I2C controllers cannot be distinguished by probing because both
 normally use `0x3c`.
 
@@ -61,6 +62,11 @@ reports both logical Trezor buttons. Missing resources are fatal; a transfer fai
 is logged without terminating USB service. The regular firmware `emulatorPoll`
 path retries after one second, reinitializes the display, and retransmits the
 current framebuffer even when the UI produces no later refresh.
+
+The ST7789 backend requests GPIO25 Data/Command, GPIO27 reset, and GPIO24
+backlight, then uses SPI mode 0 at 32 MHz. It clears the native 240x240 panel
+once and updates only a centered 240x120 RGB565 window. Trezor's own renderer
+still composes the original 128x64 1-bit framebuffer.
 
 The original Trezor One OLED transport is SPI. The SH1106 SPI HAT is not the
 original display controller, but it preserves the four-wire transport style.
