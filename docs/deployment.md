@@ -43,12 +43,14 @@ Install the normal C and package-config development dependencies. On
 Debian-family systems the base packages are:
 
 ```sh
-sudo apt install build-essential git pkg-config
+sudo apt install build-essential git pkg-config python3-dev libffi-dev
+sudo snap install astral-uv --classic
 ```
 
-Install `uv` using its supported packaging method and provide an executable
-`protoc` whose `--version` output is exactly `libprotoc 33.5`. The worker build
-rejects a different protobuf compiler so generated messages cannot silently
+The build uses `uv tool run` with pinned `grpcio-tools==1.81.0`, which provides
+`libprotoc 33.5` matching the upstream locked Python protobuf 6.33.5 runtime.
+No separately installed or copied `protoc` executable is required. The build
+checks the reported compiler version so generated messages cannot silently
 drift from the pinned release.
 
 Clone and initialize only the selected Trezor One dependencies:
@@ -58,7 +60,7 @@ git clone https://github.com/qpernil/virtual-trezor.git
 cd virtual-trezor
 make init
 make check
-PROTOC_BIN=/absolute/path/to/protoc-33.5 make worker
+make worker
 ```
 
 The resulting executable is `build/virtual-trezor-worker`.

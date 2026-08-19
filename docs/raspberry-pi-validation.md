@@ -22,11 +22,11 @@ descriptors.
 
 ## Build
 
-The Pi build used GCC, the pinned upstream `uv` environment, and `libprotoc
-33.5`:
+The Pi build used GCC, the pinned upstream `uv` environment, and package-managed
+`grpcio-tools==1.81.0`, which provides `libprotoc 33.5`:
 
 ```sh
-PROTOC_BIN=/path/to/protoc-33.5 make worker
+make worker
 ```
 
 The build used the upstream legacy firmware Makefile for the real firmware

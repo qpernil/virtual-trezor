@@ -37,10 +37,11 @@ make init
 make check
 ```
 
-Linux worker changes should also build with the pinned protobuf compiler:
+Linux worker changes should also build with the package-managed pinned
+protobuf compiler:
 
 ```sh
-PROTOC_BIN=/path/to/protoc-33.5 make worker
+make worker
 ```
 
 For USB- or hardware-visible changes, include the Pi model, OS, kernel, UDC,

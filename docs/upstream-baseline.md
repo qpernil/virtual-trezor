@@ -10,7 +10,7 @@
 | Host | macOS arm64 |
 | Compiler | Apple Clang 21 |
 | Python environment | upstream `uv.lock` |
-| Protobuf compiler | `libprotoc 33.5` |
+| Protobuf compiler | `grpcio-tools==1.81.0` (`libprotoc 33.5`) |
 | Artifact | `legacy/firmware/trezor.elf` |
 
 The upstream source and gitlink were not modified. Generated files and object
@@ -29,9 +29,10 @@ nested repositories:
 - `vendor/ts-tvl`, because the monorepo's locked `uv` project declares it as an
   editable Python dependency even though it is not linked into Trezor One
 
-Both builds require `protoc` 33.5, matching the locked Python protobuf 6.33.5
-runtime. The baseline additionally requires SDL2 and SDL2_image for the
-unmodified emulator display/buttons.
+Both builds obtain `protoc` 33.5 from package-managed
+`grpcio-tools==1.81.0`, matching the locked Python protobuf 6.33.5 runtime.
+The baseline additionally requires SDL2 and SDL2_image for the unmodified
+emulator display/buttons.
 
 No other nested submodule was initialized.
 
