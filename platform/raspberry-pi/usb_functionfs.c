@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /*
  * FunctionFS transport for the unmodified Trezor One emulator firmware.
  *

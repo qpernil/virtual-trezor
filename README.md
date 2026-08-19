@@ -14,8 +14,10 @@ side-channel protections.
 The worker is designed to run under
 [`usb-gadget-supervisor`](https://github.com/qpernil/usb-gadget-supervisor).
 The supervisor owns ConfigFS, FunctionFS setup, UDC binding, privilege drop,
-and lifecycle control. This repository owns the Trezor protocol, persistent
-simulated flash, display, buttons, and unprivileged endpoint I/O.
+and lifecycle control. This repository owns its Raspberry Pi integration,
+persistent simulated-flash adaptation, display and button backends, and
+unprivileged endpoint I/O. Upstream Trezor code remains owned and licensed by
+its respective copyright holders.
 
 ## Quick start
 
@@ -75,8 +77,11 @@ replacing the Raspberry Pi hardware boundary:
   address `0x3c` or to a factory-configured SH1106 SPI HAT;
 - do not patch the upstream submodule.
 
-Trezor Suite recognizes the worker and reaches its firmware-check and
-on-device confirmation workflow; complete setup/recovery validation remains.
+Trezor Suite recognizes the worker, can initialize its simulated state, and
+reaches on-device confirmation workflows. Production Suite reports the
+expected firmware-integrity failure and refuses cryptocurrency transaction
+operations because this worker is not authenticated production firmware.
+Recovery remains unvalidated.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
 interface, so the separate U2F HID interface is also pending. A real Trezor
 One uses SPI for its OLED. The physical-HAT backend therefore preserves that
@@ -154,6 +159,8 @@ links neither upstream UDP nor SDL display/button implementations.
 - [I2C display and oscilloscope plan](docs/i2c-display-plan.md)
 - [Raspberry Pi deployment](docs/deployment.md)
 - [Raspberry Pi platform implementation](platform/raspberry-pi/README.md)
+- [Implementation provenance](PROVENANCE.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Safety and identity
 
@@ -161,9 +168,15 @@ Never use this software to protect real funds, recovery seeds, passphrases, or
 other valuable secrets. Emulator randomness and file-backed storage are not
 hardware security.
 
-Trezor names, protocol identifiers, and USB identifiers are used only for
-controlled compatibility testing. This project is not affiliated with or
-endorsed by Trezor Company.
+The USB VID/PID is retained for controlled, local emulator compatibility
+testing. The descriptor strings identify this implementation as virtual. The
+identifier is not a project assignment and must not be used for redistributed,
+manufactured, or commercial devices without permission from its owner.
+
+This independent integration is not affiliated with, sponsored by, or
+endorsed by Trezor Company. Trezor is a trademark of Trezor Company s.r.o.; the
+name is used descriptively to identify the upstream firmware and protocol with
+which the project interoperates.
 
 ## Contributing
 
@@ -177,4 +190,8 @@ a public issue.
 
 This integration project is licensed under GPL-3.0. The upstream monorepo
 contains components under GPL-3.0, LGPL-3.0, MIT, and file-specific licenses;
-the upstream notices remain authoritative for those files.
+the upstream notices remain authoritative for those files. Binary
+redistributors must provide the complete corresponding source and build
+scripts. GitHub's automatic source archives do not contain submodule contents;
+see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) before publishing a
+release.
