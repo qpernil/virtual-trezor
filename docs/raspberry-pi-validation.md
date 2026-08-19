@@ -47,10 +47,14 @@ The gadget enumerated on macOS at full speed with:
 | Field | Observed value |
 | --- | --- |
 | Vendor/product | `1209:53c1` |
-| Manufacturer | `SatoshiLabs` |
-| Product | `TREZOR` |
+| Manufacturer at validation time | `SatoshiLabs` |
+| Product at validation time | `TREZOR` |
 | Serial | `virtual-trezor-one` |
 | Device release | `0x0100` |
+
+This table is a historical validation record. The current profiles use
+`Virtual Trezor` for both descriptor strings while retaining the compatibility
+VID/PID and firmware version.
 
 The pinned `trezorlib` WebUSB transport discovered `webusb:001:1:4`, opened the
 real USB endpoints, and received these unmodified firmware features:

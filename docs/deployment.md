@@ -257,6 +257,10 @@ The UDC should reach `configured` after attachment to the host. Confirm that
 `trezorctl` or the pinned `trezorlib` reports model `1` and firmware `1.14.1`
 before testing Trezor Suite. The firmware-integrity warning from Suite is
 expected because this Linux worker is not an official signed embedded image.
+Production Suite may refuse transaction operations after that failed check;
+this is an intentional safety boundary, not a transport failure. Use testnet
+or regtest with development tooling for signing-flow experiments, and never
+place a valuable seed in the worker.
 
 Use physical active-low buttons on GPIO5/GPIO26 or the remote virtual-display
 client for No/Yes confirmation. Stop the service before selecting another

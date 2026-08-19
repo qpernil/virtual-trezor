@@ -6,9 +6,10 @@
 #include <string.h>
 
 /*
- * Waveshare's SH1106 initialization sequence, adapted to use segment and COM
- * remapping for the genuine Trezor framebuffer's reversed physical ordering.
- * Display-on is delayed and sent separately, as in the vendor implementation.
+ * Functional SH1106 controller commands assembled from public controller
+ * documentation and checked against publicly available hardware examples.
+ * Segment and COM remapping match the upstream Trezor framebuffer's reversed
+ * physical ordering. Display-on is deliberately sent as a separate step.
  */
 static const uint8_t init_message[] = {
     0x00, 0xae, 0x02, 0x10, 0x40, 0x81, 0xa0, 0xa1, 0xc8,

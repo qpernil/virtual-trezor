@@ -10,8 +10,8 @@ max_speed = "full-speed"
 device_class = 0
 device_subclass = 0
 device_protocol = 0
-manufacturer = "SatoshiLabs"
-product = "TREZOR"
+manufacturer = "Virtual Trezor"
+product = "Virtual Trezor"
 serial = "virtual-trezor-one"
 max_power_ma = 100
 
