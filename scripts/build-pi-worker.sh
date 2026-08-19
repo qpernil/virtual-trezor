@@ -32,6 +32,11 @@ uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 mkdir -p "$PROJECT_ROOT/build"
 export PATH="$UPSTREAM_DIR/.venv/bin:$PATH"
 export PROTOC="$PROTOC_COMMAND"
+if printf 'int main(void) { return 0; }\n' | \
+  "${CC:-cc}" -Werror -Wno-error=unterminated-string-initialization \
+    -x c -c -o /dev/null - >/dev/null 2>&1; then
+  export CFLAGS="${CFLAGS:-} -Wno-error=unterminated-string-initialization"
+fi
 export EMULATOR=1
 export DEBUG_LINK=0
 
