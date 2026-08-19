@@ -1,5 +1,6 @@
 # Virtual Trezor
 
+[![CI](https://github.com/qpernil/virtual-trezor/actions/workflows/ci.yml/badge.svg)](https://github.com/qpernil/virtual-trezor/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#current-status)
 
