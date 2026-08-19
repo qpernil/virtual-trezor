@@ -38,7 +38,12 @@ make -C "$LEGACY_DIR/firmware/protob" clean
 
 HOST_CFLAGS=""
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  HOST_CFLAGS="-Wno-gnu-folding-constant -Wno-error=unterminated-string-initialization"
+  HOST_CFLAGS="-Wno-gnu-folding-constant"
+fi
+if printf 'int main(void) { return 0; }\n' | \
+  "${CC:-cc}" -Werror -Wno-error=unterminated-string-initialization \
+    -x c -c -o /dev/null - >/dev/null 2>&1; then
+  HOST_CFLAGS="$HOST_CFLAGS -Wno-error=unterminated-string-initialization"
 fi
 
 env \
