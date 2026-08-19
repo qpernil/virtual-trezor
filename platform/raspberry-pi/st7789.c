@@ -56,30 +56,39 @@ void st7789_build_window_data(uint8_t column[4], uint8_t row[4],
   encode_coordinate(row + 2, (uint16_t)(y + height - 1));
 }
 
-static bool legacy_pixel_is_set(
-    const uint8_t source[ST7789_SOURCE_FRAMEBUFFER_SIZE], uint16_t x,
-    uint16_t y) {
-  size_t offset = ST7789_SOURCE_FRAMEBUFFER_SIZE - 1 - x -
-                  (size_t)(y / 8) * ST7789_SOURCE_WIDTH;
-  uint8_t mask = (uint8_t)(1U << (7 - (y % 8)));
-  return (source[offset] & mask) != 0;
-}
-
 void st7789_encode_legacy_frame(
     uint8_t destination[ST7789_RENDER_BUFFER_SIZE],
     const uint8_t source[ST7789_SOURCE_FRAMEBUFFER_SIZE]) {
+  uint8_t source_x_for_output[ST7789_RENDER_WIDTH];
+  uint8_t source_x = 0;
+  uint8_t x_fraction = 0;
+  for (uint16_t x = 0; x < ST7789_RENDER_WIDTH; ++x) {
+    source_x_for_output[x] = source_x;
+    x_fraction = (uint8_t)(x_fraction + 8);
+    if (x_fraction >= 15) {
+      x_fraction = (uint8_t)(x_fraction - 15);
+      ++source_x;
+    }
+  }
+
   size_t output = 0;
+  uint8_t source_y = 0;
+  uint8_t y_fraction = 0;
   for (uint16_t y = 0; y < ST7789_RENDER_HEIGHT; ++y) {
-    uint16_t source_y =
-        (uint16_t)((uint32_t)y * ST7789_SOURCE_HEIGHT / ST7789_RENDER_HEIGHT);
+    size_t source_row = ST7789_SOURCE_FRAMEBUFFER_SIZE - 1 -
+                        (size_t)(source_y / 8) * ST7789_SOURCE_WIDTH;
+    uint8_t mask = (uint8_t)(1U << (7 - (source_y % 8)));
     for (uint16_t x = 0; x < ST7789_RENDER_WIDTH; ++x) {
-      uint16_t source_x = (uint16_t)((uint32_t)x * ST7789_SOURCE_WIDTH /
-                                     ST7789_RENDER_WIDTH);
-      uint8_t component = legacy_pixel_is_set(source, source_x, source_y)
-                              ? 0xff
-                              : 0x00;
+      uint8_t component =
+          (source[source_row - source_x_for_output[x]] & mask) != 0 ? 0xff
+                                                                    : 0x00;
       destination[output++] = component;
       destination[output++] = component;
+    }
+    y_fraction = (uint8_t)(y_fraction + 8);
+    if (y_fraction >= 15) {
+      y_fraction = (uint8_t)(y_fraction - 15);
+      ++source_y;
     }
   }
 }
