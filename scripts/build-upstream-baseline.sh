@@ -5,8 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 LEGACY_DIR="$UPSTREAM_DIR/legacy"
 PROTOC_TOOL="grpcio-tools==1.81.0"
-PROTOC_ENTRYPOINT="python-grpc-tools-protoc"
-PROTOC_COMMAND="uv tool run --quiet --from $PROTOC_TOOL $PROTOC_ENTRYPOINT"
+PROTOC_WRAPPER="$PROJECT_ROOT/tools/protoc"
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
 
@@ -17,7 +16,7 @@ for tool in make pkg-config uv; do
   fi
 done
 
-PROTOC_VERSION="$(uv tool run --quiet --from "$PROTOC_TOOL" "$PROTOC_ENTRYPOINT" --version)"
+PROTOC_VERSION="$("$PROTOC_WRAPPER" --version)"
 if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
   echo "Trezor v1.14.1 requires protoc 33.5; $PROTOC_TOOL provides: $PROTOC_VERSION" >&2
   exit 1
@@ -47,7 +46,7 @@ if printf 'int main(void) { return 0; }\n' | \
 fi
 
 env \
-  PROTOC="$PROTOC_COMMAND" \
+  PATH="$PROJECT_ROOT/tools:$PATH" \
   CFLAGS="$HOST_CFLAGS" \
   EMULATOR=1 \
   DEBUG_LINK=1 \

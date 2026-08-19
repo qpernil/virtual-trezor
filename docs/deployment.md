@@ -50,9 +50,12 @@ sudo snap install astral-uv --classic
 The build uses `uv tool run` with pinned `grpcio-tools==1.81.0`, which provides
 `libprotoc 33.5` matching the upstream locked Python protobuf 6.33.5 runtime.
 No separately installed or copied `protoc` executable is required. The build
-checks the reported compiler version so generated messages cannot silently
-drift from the pinned release. It also feature-detects the narrow warning
-compatibility flag required by GCC 15 for upstream fixed-size byte arrays.
+puts the checked-in `tools/protoc` launcher first on `PATH`, because the
+pinned upstream Makefile invokes that fixed command name. The launcher uses
+the pinned package above, and the build checks its reported compiler version
+so generated messages cannot silently drift from the pinned release. It also
+feature-detects the narrow warning compatibility flag required by GCC 15 for
+upstream fixed-size byte arrays.
 
 Clone and initialize only the selected Trezor One dependencies:
 

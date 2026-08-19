@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -euo pipefail
+
+exec uv tool run --quiet --from grpcio-tools==1.81.0 \
+  python-grpc-tools-protoc "$@"
