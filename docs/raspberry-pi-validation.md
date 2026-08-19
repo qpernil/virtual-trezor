@@ -102,6 +102,21 @@ low for the duration of a mouse press, producing the genuine upstream button
 press/release transition and completing the request. Left, right, and both-
 button input are represented by the two independent active-low lines.
 
+## Physical SPI HAT validation
+
+Both Waveshare HAT variants were subsequently validated on Raspberry Pi 4.
+The 128x64 SH1106 OLED rendered the genuine legacy framebuffer and its
+GPIO5/GPIO26/GPIO13 joystick supplied left, right, and simultaneous-button
+input. A complete wallet setup was exercised through Trezor Suite.
+
+The alternate 240x240 ST7789 HAT was validated with the same joystick mapping.
+The backend decodes and scales the unchanged 128x64 framebuffer to a centered
+240x120 RGB565 window. Its standalone pattern confirmed reset, backlight,
+orientation, address-window construction, and SPI transfer. At 62.5 MHz, 100
+complete conversions and physical frame writes took 899.4 ms: 8.99 ms/frame,
+or 111.2 frames/s. The full FunctionFS worker then displayed the upstream
+startup and wallet-setup UI correctly on the physical panel.
+
 ## Coexistence with other gadget profiles
 
 The Virtual Trezor worker and profile may remain installed beside Virtual
@@ -115,22 +130,20 @@ concurrently.
 
 - Only the main vendor interface is published. The firmware advertises U2F,
   but the separate U2F HID interface is not yet exposed.
-- Full Trezor Suite device initialization and recovery/setup workflows still
-  require interactive validation.
+- Additional recovery/setup variants still require interactive validation.
 - The required SSD1306/SH1106 I2C backend and GPIO button backend are deployed.
   SSD1306 transferred complete frames to two Pi 3 targets
   at a measured 400 kHz with zero receive overruns or drops. SH1106 produced
   two deterministic captures of 139,412 bytes each: 28 initialization bytes
   plus 131 complete 1,064-byte page-addressed refreshes. Target-side rendering
-  and remote button control are validated; a physical OLED/button HAT remains.
+  remote button control, and the physical OLED/button HAT are validated.
   The real Trezor One OLED
   is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
   upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
-- The default SH1106 SPI profile and ARM64 worker build are deployed. A
-  zero-argument, no-HAT smoke test selected `sh1106-spi`, opened
-  supervisor-inherited `/dev/spidev0.0`, configured mode 0 at 4 MHz, drove
-  GPIO24 Data/Command and GPIO25 reset, and attached FunctionFS. Pixel and
-  button validation against the physical HAT remains pending.
+- The default SH1106 SPI profile and alternate ST7789 SPI profile are deployed
+  and physically validated. The ST7789's RGB565 transfer remains synchronous
+  with `oledRefresh`; firmware animation delays therefore include the measured
+  frame-write time. Dirty-region updates are a possible future refinement.
 - The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
   but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB
   communication works; BOS/WebUSB descriptor parity still needs review.
