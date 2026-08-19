@@ -97,6 +97,9 @@ int main(void) {
   assert(init_step_count == 17);
   assert(init_steps[0].command == 0x11);
   assert(init_steps[0].delay_ms == 120);
+  assert(init_steps[1].command == 0x36);
+  assert(init_steps[1].data_length == 1);
+  assert(init_steps[1].data[0] == 0x70);
   assert(init_steps[2].command == 0x3a);
   assert(init_steps[2].data_length == 1);
   assert(init_steps[2].data[0] == 0x05);
