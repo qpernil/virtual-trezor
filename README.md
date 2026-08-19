@@ -101,7 +101,7 @@ SPI. The
 `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides it.
 SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.
 The ST7789 HAT instead uses GPIO25 Data/Command, GPIO27 reset, GPIO24
-backlight, and SPI mode 0 at 32 MHz.
+backlight, and SPI mode 0 at 62.5 MHz.
 The two active-low firmware buttons are read on GPIO5 and GPIO26; GPIO13 maps
 the HAT joystick-center action to both simultaneously. Both I2C
 display streams have been validated at 400 kHz against the Pi 3 target driver.

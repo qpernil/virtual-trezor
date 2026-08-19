@@ -64,7 +64,7 @@ path retries after one second, reinitializes the display, and retransmits the
 current framebuffer even when the UI produces no later refresh.
 
 The ST7789 backend requests GPIO25 Data/Command, GPIO27 reset, and GPIO24
-backlight, then uses SPI mode 0 at 32 MHz. It clears the native 240x240 panel
+backlight, then uses SPI mode 0 at 62.5 MHz. It clears the native 240x240 panel
 once and updates only a centered 240x120 RGB565 window. Trezor's own renderer
 still composes the original 128x64 1-bit framebuffer.
 

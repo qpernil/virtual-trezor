@@ -224,7 +224,7 @@ pins differ:
 | Yes/right | 26 | 37 |
 | Both/joystick press | 13 | 33 |
 
-The backend uses SPI mode 0 at 32 MHz. To test only the panel wiring and the
+The backend uses SPI mode 0 at 62.5 MHz. To test only the panel wiring and the
 actual backend, without firmware, FunctionFS, or the supervisor, stop any
 gadget worker and run:
 
@@ -237,6 +237,13 @@ The test clears and initializes the panel, draws a centered border/cross/bar
 pattern, and waits for Enter before releasing its GPIO lines. This is a direct
 hardware test, so it normally requires root unless local SPI/GPIO permissions
 have been configured.
+
+Append the SPI path, GPIO path, and a frame count to measure full conversion
+and transfer throughput:
+
+```sh
+sudo ./build/st7789-test /dev/spidev0.0 /dev/gpiochip0 100
+```
 
 ## Optional second-Pi display and button bridge
 
