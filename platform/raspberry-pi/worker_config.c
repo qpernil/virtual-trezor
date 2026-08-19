@@ -20,6 +20,10 @@ static bool select_backend(const char *value, char *error, size_t error_size) {
     display_backend = DISPLAY_SH1106_SPI;
     return true;
   }
+  if (strcmp(value, "st7789-spi") == 0) {
+    display_backend = DISPLAY_ST7789_SPI;
+    return true;
+  }
   snprintf(error, error_size, "unsupported --display backend: %s", value);
   return false;
 }
@@ -93,8 +97,13 @@ bool worker_display_is_sh1106(void) {
          display_backend == DISPLAY_SH1106_SPI;
 }
 
+bool worker_display_is_st7789(void) {
+  return display_backend == DISPLAY_ST7789_SPI;
+}
+
 bool worker_display_uses_spi(void) {
-  return display_backend == DISPLAY_SH1106_SPI;
+  return display_backend == DISPLAY_SH1106_SPI ||
+         display_backend == DISPLAY_ST7789_SPI;
 }
 
 const char *worker_display_backend_name(void) {
@@ -105,6 +114,8 @@ const char *worker_display_backend_name(void) {
       return "sh1106-i2c";
     case DISPLAY_SH1106_SPI:
       return "sh1106-spi";
+    case DISPLAY_ST7789_SPI:
+      return "st7789-spi";
   }
   return "unknown";
 }

@@ -47,6 +47,8 @@ GPIO5/GPIO26. Joystick-center on GPIO13 reports both logical buttons. Install
 `profiles/virtual-trezor.toml` for that arrangement.
 Use `profiles/virtual-trezor-i2c.toml` only for the second-Pi SDL viewer or a
 resoldered I2C display.
+Use `profiles/virtual-trezor-st7789.toml` for the Waveshare 240x240 ST7789 LCD
+HAT; it scales the unchanged legacy framebuffer to a centered 240x120 image.
 
 See [`docs/deployment.md`](docs/deployment.md) for Raspberry Pi prerequisites,
 installation, profile customization, and USB gadget startup.
@@ -76,7 +78,8 @@ replacing the Raspberry Pi hardware boundary:
 - supply FunctionFS USB, supervisor-control, Linux display, and active-low
   GPIO button implementations from `platform/raspberry-pi`;
 - send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
-  address `0x3c` or to a factory-configured SH1106 SPI HAT;
+  address `0x3c`, a factory-configured SH1106 SPI HAT, or a 240x240 ST7789 SPI
+  HAT;
 - do not patch the upstream submodule.
 
 Trezor Suite recognizes the worker, can initialize its simulated state, and
@@ -94,8 +97,11 @@ upstream framebuffer and UI composition.
 The default checked-in profile declares `/dev/spidev0.0` and
 `/dev/gpiochip0`; the explicitly named I2C profile instead declares
 `/dev/i2c-1` and `/dev/gpiochip0`. With no argument the worker selects SH1106
-SPI. The `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option overrides it.
+SPI. The
+`--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides it.
 SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.
+The ST7789 HAT instead uses GPIO25 Data/Command, GPIO27 reset, GPIO24
+backlight, and SPI mode 0 at 32 MHz.
 The two active-low firmware buttons are read on GPIO5 and GPIO26; GPIO13 maps
 the HAT joystick-center action to both simultaneously. Both I2C
 display streams have been validated at 400 kHz against the Pi 3 target driver.

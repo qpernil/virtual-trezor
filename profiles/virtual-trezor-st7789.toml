@@ -1,0 +1,41 @@
+schema = 1
+name = "virtual-trezor-st7789"
+
+[usb]
+vendor_id = 0x1209
+product_id = 0x53c1
+bcd_usb = 0x0210
+bcd_device = 0x0100
+max_speed = "full-speed"
+device_class = 0
+device_subclass = 0
+device_protocol = 0
+manufacturer = "Virtual Trezor"
+product = "Virtual Trezor"
+serial = "virtual-trezor-one-st7789"
+max_power_ma = 100
+
+[worker]
+command = "/home/per/virtual-trezor/build/virtual-trezor-worker"
+arguments = ["--display=st7789-spi"]
+run_as = "per"
+readiness_timeout_ms = 30000
+state_directory = "/var/lib/virtual-trezor-st7789"
+runtime_directory = "/run/virtual-trezor-st7789"
+
+[[resources]]
+name = "display-spi"
+path = "/dev/spidev0.0"
+access = "read-write"
+optional = false
+
+[[resources]]
+name = "display-gpio"
+path = "/dev/gpiochip0"
+access = "read-write"
+optional = false
+
+[[functions]]
+type = "functionfs"
+name = "trezor"
+mount = "/dev/ffs-virtual-trezor-st7789"
