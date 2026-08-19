@@ -6,12 +6,12 @@
 
 /*
  * Register values follow the ST7789VM interface and the Waveshare 1.3-inch
- * LCD HAT module requirements. Coordinates use the panel's native portrait
- * memory order; the square panel does not require a rotation transform.
+ * LCD HAT module requirements. MADCTL 0x70 selects the HAT's horizontal scan
+ * orientation so a logical 240x120 window is physically wider than it is tall.
  */
 static const st7789_init_step_t init_steps[] = {
     {0x11, {0}, 0, 120},
-    {0x36, {0x00}, 1, 0},
+    {0x36, {0x70}, 1, 0},
     {0x3a, {0x05}, 1, 0},
     {0xb2, {0x0c, 0x0c, 0x00, 0x33, 0x33}, 5, 0},
     {0xb7, {0x00}, 1, 0},
