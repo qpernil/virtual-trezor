@@ -114,7 +114,8 @@ The available override values are `ssd1306-i2c`, `sh1106-i2c`, and
 SH1106 backends request GPIO25 and pulse reset before sending the initialization
 sequence. SPI additionally drives GPIO24 Data/Command and uses SPI0 CE0 for
 chip select. Firmware No/Yes input uses active-low GPIO5 and GPIO26 with
-pull-ups. These can connect to physical buttons or to the button outputs of the
+pull-ups. Active-low GPIO13 maps the physical HAT's joystick press to both
+logical buttons. GPIO5/GPIO26 can instead connect to the button outputs of the
 second-Pi virtual-display client.
 
 The checked-in profile records the checkout path and account used by the
@@ -171,10 +172,12 @@ The factory HAT mapping is:
 | Reset | 25 | 22 |
 | No/left | 5 | 29 |
 | Yes/right | 26 | 37 |
+| Both/joystick press | 13 | 33 |
 
-No/left and Yes/right mean the HAT joystick directions. Its separate KEY1,
-KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16 and are not sampled by
-the current two-button Trezor backend.
+No/left and Yes/right mean the HAT joystick directions. Pressing the joystick
+straight down reports both logical Trezor buttons simultaneously. The separate
+KEY1, KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16 and are not
+sampled.
 
 The worker configures mode 0 at 4 MHz. Power down before fitting or removing
 the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring
@@ -262,8 +265,8 @@ this is an intentional safety boundary, not a transport failure. Use testnet
 or regtest with development tooling for signing-flow experiments, and never
 place a valuable seed in the worker.
 
-Use physical active-low buttons on GPIO5/GPIO26 or the remote virtual-display
-client for No/Yes confirmation. Stop the service before selecting another
+Use the HAT joystick on GPIO5/GPIO26/GPIO13 or the remote virtual-display
+client for No/Yes/both input. Stop the service before selecting another
 profile:
 
 ```sh

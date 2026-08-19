@@ -12,7 +12,7 @@ The current replacement surface is:
 | Replacement | Responsibility |
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; FunctionFS descriptors/endpoints and supervisor lifecycle |
-| `buttons_gpio.c` | `buttonRead`; active-low GPIO5 and GPIO26 inputs for No and Yes |
+| `buttons_gpio.c` | `buttonRead`; active-low GPIO5/GPIO26 inputs for No/Yes and GPIO13 center mapped to both |
 | `display_linux.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over inherited I2C or SPI descriptors |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
@@ -55,8 +55,9 @@ The required `display-gpio` resource passes `/dev/gpiochip0` as
 `USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. SH1106 initialization requests GPIO25
 and performs the vendor reset pulse. SPI mode also requests GPIO24 to select
 command or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0
-drive chip select. The button backend requests GPIO5 and GPIO26 as pull-up
-inputs from the same GPIO chip. Missing resources are fatal; a transfer failure
+drive chip select. The button backend requests GPIO5, GPIO26, and GPIO13 as
+pull-up inputs from the same GPIO chip. GPIO13 is the HAT joystick press and
+reports both logical Trezor buttons. Missing resources are fatal; a transfer failure
 is logged without terminating USB service. The regular firmware `emulatorPoll`
 path retries after one second, reinitializes the display, and retransmits the
 current framebuffer even when the UI produces no later refresh.

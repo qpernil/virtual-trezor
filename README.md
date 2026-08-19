@@ -42,7 +42,8 @@ PROTOC_BIN=/path/to/protoc-33.5 make worker
 The default runtime arrangement is a factory-configured SH1106 SPI HAT on the
 same Pi as the worker. SPI0 uses GPIO8/10/11, Data/Command uses GPIO24, reset
 uses GPIO25, and the Trezor No/Yes inputs use joystick-left/right on
-GPIO5/GPIO26. Install `profiles/virtual-trezor.toml` for that arrangement.
+GPIO5/GPIO26. Joystick-center on GPIO13 reports both logical buttons. Install
+`profiles/virtual-trezor.toml` for that arrangement.
 Use `profiles/virtual-trezor-i2c.toml` only for the second-Pi SDL viewer or a
 resoldered I2C display.
 
@@ -94,7 +95,8 @@ The default checked-in profile declares `/dev/spidev0.0` and
 `/dev/i2c-1` and `/dev/gpiochip0`. With no argument the worker selects SH1106
 SPI. The `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi` option overrides it.
 SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.
-The two active-low firmware buttons are read on GPIO5 and GPIO26. Both I2C
+The two active-low firmware buttons are read on GPIO5 and GPIO26; GPIO13 maps
+the HAT joystick-center action to both simultaneously. Both I2C
 display streams have been validated at 400 kHz against the Pi 3 target driver.
 A transient display failure leaves USB running; the regular emulator poll
 path reinitializes the display after one second and retransmits the current

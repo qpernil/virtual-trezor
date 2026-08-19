@@ -6,11 +6,25 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "button_gpio_state.h"
 #include "sh1106_stream.h"
 #include "ssd1306_stream.h"
 #include "worker_config.h"
 
 int main(void) {
+  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE |
+                             BUTTON_GPIO_CENTER_LINE) == 0);
+  assert(button_gpio_pressed(BUTTON_GPIO_YES_LINE |
+                             BUTTON_GPIO_CENTER_LINE) ==
+         BUTTON_GPIO_NO_PRESSED);
+  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE |
+                             BUTTON_GPIO_CENTER_LINE) ==
+         BUTTON_GPIO_YES_PRESSED);
+  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE) ==
+         (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
+  assert(button_gpio_pressed(0) ==
+         (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
+
   static const uint8_t expected_init[] = {
       0x00, 0xae, 0xd5, 0x80, 0xa8, 0x3f, 0xd3, 0x00, 0x40,
       0x8d, 0x14, 0x20, 0x00, 0xa1, 0xc8, 0xda, 0x12, 0x81,
@@ -128,6 +142,6 @@ int main(void) {
   assert(!worker_config_parse(2, unknown_arguments, error, sizeof(error)));
   assert(strstr(error, "unknown worker argument") != NULL);
 
-  puts("SSD1306 and SH1106 command, framebuffer, and option tests passed.");
+  puts("Button mapping, SSD1306/SH1106 stream, and option tests passed.");
   return 0;
 }
