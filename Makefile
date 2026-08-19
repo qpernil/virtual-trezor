@@ -58,6 +58,7 @@ st7789-test:
 	@mkdir -p build
 	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -pedantic \
 		-Iplatform/raspberry-pi -Iupstream/trezor-firmware/legacy \
+		-Iupstream/trezor-firmware/legacy/gen \
 		platform/raspberry-pi/display_linux.c \
 		platform/raspberry-pi/worker_config.c \
 		platform/raspberry-pi/sh1106_stream.c \
