@@ -11,18 +11,20 @@ The current replacement surface is:
 
 | Replacement | Responsibility |
 | --- | --- |
-| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; FunctionFS descriptors/endpoints and supervisor lifecycle |
+| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; inherited FunctionFS endpoints, `ep0` events, and supervisor liveness |
 | `buttons_gpio.c` | `buttonRead`; active-low GPIO5/GPIO26 inputs for No/Yes and GPIO13 center mapped to both |
-| `display_linux.c` | `oledInit`, `oledRefresh`, and recovery through `emulatorPoll`; send the upstream framebuffer over inherited I2C or SPI descriptors |
+| `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; send the upstream framebuffer over inherited I2C or SPI descriptors |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
 | `st7789.c` | ST7789 initialization, address-window encoding, and conversion of the legacy reverse-page framebuffer to centered 240x120 RGB565 pixels |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
 
-`usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`. It
-publishes one vendor-specific main interface with 64-byte interrupt IN and OUT
-endpoints. DebugLink is disabled. The separate U2F HID interface is deferred
-until the main Trezor/Suite transport is validated.
+`usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`.
+The installed profile declares one vendor-specific main interface with 64-byte
+interrupt IN and OUT endpoints. The supervisor publishes it and transfers
+`ep0`, OUT, and IN in a fixed pre-bind bundle; the worker never opens the
+FunctionFS mount. DebugLink is disabled. The separate U2F HID interface is
+deferred until the main Trezor/Suite transport is validated.
 
 The implementation intentionally processes one FunctionFS OUT packet per poll
 cycle. FunctionFS endpoint reads can block when a second packet is not queued,
@@ -62,6 +64,11 @@ reports both logical Trezor buttons. Missing resources are fatal; a transfer fai
 is logged without terminating USB service. The regular firmware `emulatorPoll`
 path retries after one second, reinitializes the display, and retransmits the
 current framebuffer even when the UI produces no later refresh.
+
+On an orderly exit the worker blanks display RAM and turns the panel output
+off. This covers service stops and requested USB reincarnations. `SIGKILL`
+cannot run process cleanup; the replacement worker clears the panel again as
+part of display initialization.
 
 The ST7789 backend requests GPIO25 Data/Command, GPIO27 reset, and GPIO24
 backlight, then uses SPI mode 0 at 62.5 MHz. It clears the native 240x240 panel

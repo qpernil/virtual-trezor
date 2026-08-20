@@ -21,7 +21,7 @@ check-worker-boundary:
 	@grep -q 'legacy/firmware/udp.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/udp.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/setup.c' mk/worker-sources.mk
-	@grep -q 'USB_GADGET_FUNCTIONFS_TREZOR' platform/raspberry-pi/usb_functionfs.c
+	@grep -q 'receive_fd_bundle(UGSP_PREBIND_RESOURCES, 3' platform/raspberry-pi/usb_functionfs.c
 	@grep -q 'GPIO_V2_LINE_GET_VALUES_IOCTL' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'BUTTON_CENTER_GPIO 13' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'USB_GADGET_RESOURCE_DISPLAY_I2C_FD' platform/raspberry-pi/display_linux.c

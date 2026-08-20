@@ -2,11 +2,12 @@
 
 ## Process boundary
 
-`usb-gadget-supervisor` creates the USB gadget, mounts FunctionFS, opens any
+`usb-gadget-supervisor` creates the USB gadget, validates and publishes the
+profile's FunctionFS descriptors, opens the resulting endpoints and any
 declared I2C/SPI/GPIO resources, drops privileges, and launches this worker.
-The worker publishes its FunctionFS descriptors and owns all USB endpoint
-traffic. The supervisor does not interpret Trezor messages or proxy secret
-material.
+The worker receives `ep0`, OUT, and IN as open file descriptors and owns all
+runtime USB traffic. It opens no USB path. The supervisor does not interpret
+Trezor messages or proxy secret material.
 
 A Pi currently provides one usable USB device controller. The supervisor can
 therefore select a Virtual Trezor or Virtual YubiKey profile, but it cannot
@@ -59,8 +60,8 @@ USB has two emulator-specific layers that must both be excluded:
 - `legacy/emulator/udp.c` implements the localhost datagram sockets beneath
   those calls.
 
-The Pi port replaces the firmware-facing layer directly with FunctionFS
-endpoint I/O and adds the supervisor lifecycle connection. It does not
+The Pi port replaces the firmware-facing layer directly with inherited
+FunctionFS endpoint I/O and adds the supervisor resource/liveness connection. It does not
 reproduce the socket abstraction. Emulator flash, timer, and randomness remain
 in place; desktop SDL does not.
 
