@@ -16,9 +16,9 @@ serial = "virtual-trezor-one"
 max_power_ma = 100
 
 [worker]
-command = "/home/per/virtual-trezor/build/virtual-trezor-worker"
+command = "/absolute/path/to/virtual-trezor-worker"
 arguments = ["--display=sh1106-i2c"]
-run_as = "per"
+run_as = "worker-account"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor"
 runtime_directory = "/run/virtual-trezor"

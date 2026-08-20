@@ -11,6 +11,10 @@ a development simulator, not a hardware wallet: secrets stored on a
 general-purpose Pi do not receive Trezor's physical, extraction, or
 side-channel protections.
 
+Deployment is tested on both 64-bit Ubuntu and 64-bit Raspberry Pi OS. On
+either system, enabling DWC2 in peripheral mode provides the UDC used by the
+supervisor through ConfigFS and FunctionFS.
+
 The worker is designed to run under
 [`usb-gadget-supervisor`](https://github.com/qpernil/usb-gadget-supervisor).
 The supervisor owns ConfigFS, FunctionFS setup, UDC binding, privilege drop,

@@ -16,9 +16,9 @@ serial = "virtual-trezor-one-st7789"
 max_power_ma = 100
 
 [worker]
-command = "/home/per/virtual-trezor/build/virtual-trezor-worker"
+command = "/absolute/path/to/virtual-trezor-worker"
 arguments = ["--display=st7789-spi"]
-run_as = "per"
+run_as = "worker-account"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor-st7789"
 runtime_directory = "/run/virtual-trezor-st7789"

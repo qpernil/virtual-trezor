@@ -2,11 +2,12 @@
 
 ## Scope
 
-This guide deploys the headless FunctionFS/I2C/SPI/GPIO worker on a 64-bit
-Raspberry Pi Linux system. The worker is experimental and must use only
-disposable emulator state and test seeds. It requires a USB Device Controller,
-the selected I2C or SPI display bus, and a GPIO chip; it does not require a
-desktop session.
+This guide deploys the headless FunctionFS/I2C/SPI/GPIO worker on a Raspberry
+Pi running either 64-bit Ubuntu or 64-bit Raspberry Pi OS; both are tested.
+Enabling DWC2 in peripheral mode provides the UDC used by the supervisor
+through ConfigFS and FunctionFS. The worker is experimental and must use only
+disposable emulator state and test seeds. It also requires the selected I2C or
+SPI display bus and a GPIO chip; it does not require a desktop session.
 
 The tested architecture has two separately installed projects:
 
@@ -132,9 +133,9 @@ pull-ups. Active-low GPIO13 maps the physical HAT's joystick press to both
 logical buttons. GPIO5/GPIO26 can instead connect to the button outputs of the
 second-Pi virtual-display client.
 
-The checked-in profile records the checkout path and account used by the
-validated Pi. Before installing it, edit `worker.command` and `worker.run_as`
-if the repository or unprivileged account is elsewhere:
+The checked-in profiles use neutral placeholders. Before installing one, set
+`worker.command` to the built worker's absolute path and `worker.run_as` to its
+unprivileged service account:
 
 ```sh
 editor profiles/virtual-trezor.toml
