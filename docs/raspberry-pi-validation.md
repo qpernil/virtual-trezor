@@ -36,10 +36,11 @@ software may deliberately reject protected wallet operations.
 Inspect the running worker and confirm:
 
 - it runs as the configured non-root account;
-- it holds the control socket, FunctionFS `ep0`, OUT, and IN descriptors;
-- it has no FunctionFS path environment variable and never opens `/dev/ffs-*`;
+- it holds fixed control FD 3 plus FunctionFS `ep0`, OUT, and IN descriptors;
+- it has no descriptor-number or device-path environment variables and never
+  opens `/dev/ffs-*`;
 - `ep0` `ENABLE`, `DISABLE`, `UNBIND`, and `SETUP` events control runtime state;
-- I2C/SPI/GPIO access exists only through profile-approved inherited FDs; and
+- I2C/SPI/GPIO access exists only through profile-approved pre-bind FDs; and
 - FunctionFS remains root-owned.
 
 ## Incarnation recovery

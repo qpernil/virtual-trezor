@@ -27,13 +27,11 @@ runtime_directory = "/run/virtual-trezor-st7789"
 name = "display-spi"
 path = "/dev/spidev0.0"
 access = "read-write"
-optional = false
 
 [[resources]]
 name = "display-gpio"
 path = "/dev/gpiochip0"
 access = "read-write"
-optional = false
 
 [[functions]]
 type = "functionfs"

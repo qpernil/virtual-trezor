@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "display_linux.h"
+#include "usb_functionfs.h"
 #include "worker_config.h"
 
 int trezorFirmwareMain(void);
@@ -21,5 +22,6 @@ int main(int argc, char **argv) {
     fputs("virtual-trezor: cannot register display shutdown\n", stderr);
     return 1;
   }
+  workerReceiveSupervisorResources();
   return trezorFirmwareMain();
 }

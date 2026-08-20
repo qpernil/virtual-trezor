@@ -3,15 +3,12 @@
 /* I2C and SPI display backends for the Raspberry Pi worker. */
 
 #include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
 #include <linux/gpio.h>
 #include <linux/i2c-dev.h>
 #include <linux/spi/spidev.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
@@ -21,11 +18,9 @@
 #include "sh1106_stream.h"
 #include "ssd1306_stream.h"
 #include "st7789.h"
+#include "usb_functionfs.h"
 #include "worker_config.h"
 
-#define DISPLAY_I2C_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_I2C_FD"
-#define DISPLAY_SPI_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_SPI_FD"
-#define DISPLAY_GPIO_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_GPIO_FD"
 #define SH1106_DC_GPIO 24
 #define SH1106_RESET_GPIO 25
 #define SH1106_SPI_SPEED_HZ 4000000U
@@ -52,24 +47,6 @@ static uint64_t monotonic_ms(void) {
     return 0;
   }
   return (uint64_t)now.tv_sec * 1000 + (uint64_t)now.tv_nsec / 1000000;
-}
-
-static int required_fd_from_environment(const char *name) {
-  const char *value = getenv(name);
-  if (value == NULL || *value == '\0') {
-    fprintf(stderr, "virtual-trezor: missing required %s\n", name);
-    exit(1);
-  }
-
-  char *end = NULL;
-  errno = 0;
-  long parsed = strtol(value, &end, 10);
-  if (errno != 0 || end == value || *end != '\0' || parsed < 0 ||
-      parsed > INT_MAX || fcntl((int)parsed, F_GETFD) < 0) {
-    fprintf(stderr, "virtual-trezor: invalid required %s=%s\n", name, value);
-    exit(1);
-  }
-  return (int)parsed;
 }
 
 static void report_error(const char *operation) {
@@ -119,7 +96,7 @@ static bool set_output_line(int line_fd, bool high) {
 }
 
 static int request_output_line(unsigned int offset, const char *consumer) {
-  int gpiochip_fd = required_fd_from_environment(DISPLAY_GPIO_FD_ENV);
+  int gpiochip_fd = workerGpioResourceFd();
   struct gpio_v2_line_request request = {
       .offsets = {offset},
       .config.flags = GPIO_V2_LINE_FLAG_OUTPUT,
@@ -351,8 +328,7 @@ static bool send_initialization(void) {
 
 static bool initialize_display(void) {
   if (display_fd < 0) {
-    display_fd = required_fd_from_environment(
-        worker_display_uses_spi() ? DISPLAY_SPI_FD_ENV : DISPLAY_I2C_FD_ENV);
+    display_fd = workerDisplayResourceFd();
   }
   uint64_t now = monotonic_ms();
   if (retry_after_ms != 0 && now < retry_after_ms) {

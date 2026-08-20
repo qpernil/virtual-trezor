@@ -11,7 +11,6 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <limits.h>
 #include <linux/usb/functionfs.h>
 #include <poll.h>
 #include <pthread.h>
@@ -28,9 +27,10 @@
 
 #include "messages.h"
 #include "usb.h"
+#include "usb_functionfs.h"
 
-#define CONTROL_FD_ENV "USB_GADGET_CONTROL_FD"
 #define STATE_DIRECTORY_ENV "USB_GADGET_STATE_DIRECTORY"
+#define CONTROL_FD 3
 #define UGSP_PACKET_SIZE 8
 #define UGSP_VERSION 1
 #define UGSP_PREBIND_RESOURCES 0x01
@@ -40,10 +40,12 @@
 
 #define OUT_QUEUE_CAPACITY 64
 
-static int control_fd = -1;
+static int control_fd = CONTROL_FD;
 static int ep0_fd = -1;
 static int main_out_fd = -1;
 static int main_in_fd = -1;
+static int display_resource_fd = -1;
+static int gpio_resource_fd = -1;
 static int packet_event_fd = -1;
 static bool functionfs_enabled = false;
 static volatile char tiny = 0;
@@ -90,29 +92,9 @@ static void die_message(const char *message) {
   exit(1);
 }
 
-static int parse_fd_environment(const char *name) {
-  const char *value = getenv(name);
-  if (value == NULL || *value == '\0') {
-    fprintf(stderr, "virtual-trezor: missing inherited %s\n", name);
-    exit(1);
-  }
-  errno = 0;
-  char *end = NULL;
-  long descriptor = strtol(value, &end, 10);
-  if (errno != 0 || end == value || *end != '\0' || descriptor < 3 ||
-      descriptor > INT_MAX) {
-    fprintf(stderr, "virtual-trezor: invalid inherited %s=%s\n", name, value);
-    exit(1);
-  }
-  return (int)descriptor;
-}
-
 static void set_worker_environment(void) __attribute__((constructor));
 
 static void set_worker_environment(void) {
-  if (getenv(CONTROL_FD_ENV) == NULL) {
-    return;
-  }
   if (geteuid() == 0) {
     fputs("virtual-trezor: refusing to run the firmware worker as root\n",
           stderr);
@@ -134,7 +116,7 @@ static void receive_fd_bundle(uint8_t expected_kind, size_t expected_count,
   struct iovec iov = {.iov_base = packet, .iov_len = sizeof(packet)};
   union {
     struct cmsghdr alignment;
-    uint8_t bytes[CMSG_SPACE(3 * sizeof(int))];
+    uint8_t bytes[CMSG_SPACE(5 * sizeof(int))];
   } control;
   memset(&control, 0, sizeof(control));
   struct msghdr message = {
@@ -171,6 +153,33 @@ static void receive_fd_bundle(uint8_t expected_kind, size_t expected_count,
     die_message("malformed SCM_RIGHTS supervisor resource bundle");
   }
   memcpy(descriptors, CMSG_DATA(ancillary), expected_count * sizeof(int));
+}
+
+void workerReceiveSupervisorResources(void) {
+  if (ep0_fd >= 0) {
+    die_message("supervisor resources were received more than once");
+  }
+  int prebind[5];
+  receive_fd_bundle(UGSP_PREBIND_RESOURCES, 5, prebind);
+  ep0_fd = prebind[0];
+  main_out_fd = prebind[1];
+  main_in_fd = prebind[2];
+  display_resource_fd = prebind[3];
+  gpio_resource_fd = prebind[4];
+}
+
+int workerDisplayResourceFd(void) {
+  if (display_resource_fd < 0) {
+    die_message("display resource requested before supervisor handoff");
+  }
+  return display_resource_fd;
+}
+
+int workerGpioResourceFd(void) {
+  if (gpio_resource_fd < 0) {
+    die_message("GPIO resource requested before supervisor handoff");
+  }
+  return gpio_resource_fd;
 }
 
 static void send_control(uint8_t kind) {
@@ -403,12 +412,9 @@ static void flush_messages(void) {
 }
 
 void usbInit(void) {
-  control_fd = parse_fd_environment(CONTROL_FD_ENV);
-  int prebind[3];
-  receive_fd_bundle(UGSP_PREBIND_RESOURCES, 3, prebind);
-  ep0_fd = prebind[0];
-  main_out_fd = prebind[1];
-  main_in_fd = prebind[2];
+  if (ep0_fd < 0 || main_out_fd < 0 || main_in_fd < 0) {
+    die_message("USB initialized before supervisor resource handoff");
+  }
   packet_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
   if (packet_event_fd < 0) {
     die_errno("create FunctionFS packet event");

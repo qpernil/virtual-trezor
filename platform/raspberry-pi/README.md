@@ -44,19 +44,17 @@ continues to refresh the I2C display and sample buttons while host software
 waits for an on-device confirmation.
 
 The I2C profile declares `/dev/i2c-1` as its required `display-i2c` resource.
-The supervisor opens it while privileged and passes its descriptor as
-`USB_GADGET_RESOURCE_DISPLAY_I2C_FD`; the worker selects address `0x3c` and
-performs all device-specific transactions after privilege drop. The SPI
-profile similarly exports `/dev/spidev0.0` as
-`USB_GADGET_RESOURCE_DISPLAY_SPI_FD`. The
-worker defaults to SH1106 SPI. The
+The supervisor opens it while privileged and appends its descriptor to the
+pre-bind bundle; the worker selects address `0x3c` and performs all
+device-specific transactions after privilege drop. The SPI profile places
+`/dev/spidev0.0` in the same fixed slot. The worker defaults to SH1106 SPI. The
 `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides the backend;
 the two I2C controllers cannot be distinguished by probing because both
 normally use `0x3c`.
 
-The required `display-gpio` resource passes `/dev/gpiochip0` as
-`USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. SH1106 initialization requests GPIO25
-and performs the vendor reset pulse. SPI mode also requests GPIO24 to select
+The required `display-gpio` resource places `/dev/gpiochip0` in the next
+pre-bind slot. SH1106 initialization requests GPIO25 and performs the vendor
+reset pulse. SPI mode also requests GPIO24 to select
 command or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0
 drive chip select. The button backend requests GPIO5, GPIO26, and GPIO13 as
 pull-up inputs from the same GPIO chip. GPIO13 is the HAT joystick press and

@@ -32,8 +32,8 @@ display refresh:
 
 The Pi worker excludes `legacy/emulator/oled.c`. Project-owned `oledInit` and
 `oledRefresh` implementations send the existing framebuffer directly to an
-explicitly selected SSD1306 or SH1106 controller through an inherited I2C or
-SPI descriptor. `emulatorPoll` remains a platform ABI symbol because the
+explicitly selected SSD1306 or SH1106 controller through an I2C or SPI
+descriptor received in the pre-bind bundle. `emulatorPoll` remains a platform ABI symbol because the
 upstream firmware loop calls it in emulator builds. In this implementation it
 retries a failed display transfer after one second, reinitializing the
 controller and retransmitting the current framebuffer independently of later

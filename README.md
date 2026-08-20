@@ -74,8 +74,9 @@ replacing the Raspberry Pi hardware boundary:
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
   the generic OLED framebuffer, file-backed flash, timer, and randomness;
 - exclude both UDP source files and the upstream SDL display/button objects;
-- supply FunctionFS USB, supervisor-control, Linux display, and active-low
-  GPIO button implementations from `platform/raspberry-pi`;
+- supply FunctionFS USB, the fixed-FD supervisor control channel, Linux
+  display, and active-low GPIO button implementations from
+  `platform/raspberry-pi`;
 - send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
   address `0x3c`, a factory-configured SH1106 SPI HAT, or a 240x240 ST7789 SPI
   HAT;
