@@ -21,11 +21,11 @@ check-worker-boundary:
 	@grep -q 'legacy/firmware/udp.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/udp.c' mk/worker-sources.mk
 	@grep -q 'legacy/emulator/setup.c' mk/worker-sources.mk
-	@grep -q 'receive_fd_bundle(UGSP_PREBIND_RESOURCES, 3' platform/raspberry-pi/usb_functionfs.c
+	@grep -q 'receive_fd_bundle(UGSP_PREBIND_RESOURCES, 5' platform/raspberry-pi/usb_functionfs.c
 	@grep -q 'GPIO_V2_LINE_GET_VALUES_IOCTL' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'BUTTON_CENTER_GPIO 13' platform/raspberry-pi/buttons_gpio.c
-	@grep -q 'USB_GADGET_RESOURCE_DISPLAY_I2C_FD' platform/raspberry-pi/display_linux.c
-	@grep -q 'USB_GADGET_RESOURCE_DISPLAY_SPI_FD' platform/raspberry-pi/display_linux.c
+	@grep -q 'workerDisplayResourceFd' platform/raspberry-pi/display_linux.c
+	@grep -q 'workerGpioResourceFd' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'DISPLAY_ST7789_SPI' platform/raspberry-pi/worker_config.h
 	@grep -q 'platform_st7789.o' mk/worker-firmware.mk
 	@test -x tools/protoc

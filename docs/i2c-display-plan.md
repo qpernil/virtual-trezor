@@ -87,11 +87,9 @@ belongs in upstream `legacy/oled.c`.
 6. **Pending:** attach and validate an I2C-native physical 128x64 OLED.
 
 `usb-gadget-supervisor` opens the required `display-i2c` and `display-gpio`
-resources and exports their descriptors as
-`USB_GADGET_RESOURCE_DISPLAY_I2C_FD` and
-`USB_GADGET_RESOURCE_DISPLAY_GPIO_FD`. Pure C tests verify both exact command
-streams, page/address construction, I2C/SPI option parsing, and byte-for-byte
-framebuffer payloads.
+resources and appends their descriptors to the fixed pre-bind bundle. Pure C
+tests verify both exact command streams, page/address construction, I2C/SPI
+option parsing, and byte-for-byte framebuffer payloads.
 
 ## Wired validation
 

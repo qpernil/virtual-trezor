@@ -10,28 +10,22 @@
 #include <unistd.h>
 
 #include "st7789.h"
+#include "usb_functionfs.h"
 #include "worker_config.h"
 
-#define DISPLAY_SPI_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_SPI_FD"
-#define DISPLAY_GPIO_FD_ENV "USB_GADGET_RESOURCE_DISPLAY_GPIO_FD"
-
 static uint8_t framebuffer[ST7789_SOURCE_FRAMEBUFFER_SIZE];
+static int display_resource_fd = -1;
+static int gpio_resource_fd = -1;
 
 const uint8_t *oledGetBuffer(void) { return framebuffer; }
 void oledInit(void);
 void oledRefresh(void);
+int workerDisplayResourceFd(void) { return display_resource_fd; }
+int workerGpioResourceFd(void) { return gpio_resource_fd; }
 
 static void fail(const char *operation) {
   fprintf(stderr, "st7789-test: %s: %s\n", operation, strerror(errno));
   exit(1);
-}
-
-static void export_fd(const char *name, int fd) {
-  char value[32];
-  snprintf(value, sizeof(value), "%d", fd);
-  if (setenv(name, value, 1) != 0) {
-    fail("set environment");
-  }
 }
 
 static void set_pixel(uint16_t x, uint16_t y) {
@@ -46,8 +40,8 @@ static void draw_test_pattern(void) {
       bool border = x == 0 || y == 0 || x == ST7789_SOURCE_WIDTH - 1 ||
                     y == ST7789_SOURCE_HEIGHT - 1;
       bool diagonals = x == y * 2 || x == ST7789_SOURCE_WIDTH - 1 - y * 2;
-      bool center = x == ST7789_SOURCE_WIDTH / 2 ||
-                    y == ST7789_SOURCE_HEIGHT / 2;
+      bool center =
+          x == ST7789_SOURCE_WIDTH / 2 || y == ST7789_SOURCE_HEIGHT / 2;
       bool bars = y >= 48 && ((x / 8) % 2 == 0);
       if (border || diagonals || center || bars) {
         set_pixel(x, y);
@@ -74,16 +68,14 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  int spi_fd = open(spi_path, O_RDWR | O_CLOEXEC);
-  if (spi_fd < 0) {
+  display_resource_fd = open(spi_path, O_RDWR | O_CLOEXEC);
+  if (display_resource_fd < 0) {
     fail(spi_path);
   }
-  int gpio_fd = open(gpio_path, O_RDWR | O_CLOEXEC);
-  if (gpio_fd < 0) {
+  gpio_resource_fd = open(gpio_path, O_RDWR | O_CLOEXEC);
+  if (gpio_resource_fd < 0) {
     fail(gpio_path);
   }
-  export_fd(DISPLAY_SPI_FD_ENV, spi_fd);
-  export_fd(DISPLAY_GPIO_FD_ENV, gpio_fd);
 
   char error[160];
   char *arguments[] = {"st7789-test", "--display=st7789-spi"};
