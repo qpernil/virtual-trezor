@@ -63,11 +63,10 @@ The principal platform milestones now work:
   gadget supervisor, replacing UDP, desktop display, and desktop input with
   FunctionFS, I2C/SPI, and GPIO implementations.
 
-The Pi was recognized by macOS as USB `1209:53c1`. The pinned Trezor host
-library opened it, read a model `1` firmware `1.14.1` `Features` response, and
-completed a 173-byte multi-packet ping. See
-[`docs/upstream-baseline.md`](docs/upstream-baseline.md) and
-[`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md).
+Use the current acceptance checklist in
+[`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
+enumeration, resource confinement, transport, UI, and worker-incarnation
+recovery.
 
 The current worker keeps upstream UI composition and host support while
 replacing the Raspberry Pi hardware boundary:

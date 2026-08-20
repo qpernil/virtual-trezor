@@ -74,8 +74,7 @@ static int required_fd_from_environment(const char *name) {
 
 static void report_error(const char *operation) {
   if (!error_reported) {
-    fprintf(stderr,
-            "virtual-trezor: %s display %s failed: %s; retrying\n",
+    fprintf(stderr, "virtual-trezor: %s display %s failed: %s; retrying\n",
             worker_display_backend_name(), operation, strerror(errno));
     error_reported = true;
   }
@@ -100,8 +99,8 @@ static bool write_bytes(const uint8_t *message, size_t length) {
 
 static bool write_bytes_chunked(const uint8_t *message, size_t length) {
   while (length > 0) {
-    size_t chunk = length < SPI_WRITE_CHUNK_SIZE ? length
-                                                : SPI_WRITE_CHUNK_SIZE;
+    size_t chunk =
+        length < SPI_WRITE_CHUNK_SIZE ? length : SPI_WRITE_CHUNK_SIZE;
     if (!write_bytes(message, chunk)) {
       return false;
     }
@@ -142,16 +141,14 @@ static unsigned int display_reset_gpio(void) {
 }
 
 static uint32_t display_spi_speed_hz(void) {
-  return worker_display_is_st7789() ? ST7789_SPI_SPEED_HZ
-                                    : SH1106_SPI_SPEED_HZ;
+  return worker_display_is_st7789() ? ST7789_SPI_SPEED_HZ : SH1106_SPI_SPEED_HZ;
 }
 
 static void pulse_display_reset(void) {
   unsigned int reset_gpio = display_reset_gpio();
   if (!reset_resource_checked) {
     reset_resource_checked = true;
-    reset_line_fd = request_output_line(reset_gpio,
-                                        "virtual-trezor-reset");
+    reset_line_fd = request_output_line(reset_gpio, "virtual-trezor-reset");
     if (reset_line_fd < 0) {
       fprintf(stderr,
               "virtual-trezor: cannot request %s reset GPIO %u: %s; "
@@ -187,15 +184,15 @@ static bool initialize_spi(void) {
     return false;
   }
   if (dc_line_fd < 0) {
-    dc_line_fd = request_output_line(display_dc_gpio(),
-                                     "virtual-trezor-display-dc");
+    dc_line_fd =
+        request_output_line(display_dc_gpio(), "virtual-trezor-display-dc");
     if (dc_line_fd < 0) {
       return false;
     }
   }
   if (worker_display_is_st7789() && backlight_line_fd < 0) {
-    backlight_line_fd = request_output_line(ST7789_BACKLIGHT_GPIO,
-                                            "virtual-trezor-backlight");
+    backlight_line_fd =
+        request_output_line(ST7789_BACKLIGHT_GPIO, "virtual-trezor-backlight");
     if (backlight_line_fd < 0) {
       return false;
     }
@@ -258,6 +255,62 @@ static bool clear_st7789(void) {
   return true;
 }
 
+static bool clear_oled(void) {
+  static const uint8_t blank[SSD1306_FRAMEBUFFER_SIZE] = {0};
+
+  if (worker_display_is_sh1106()) {
+    uint8_t command[SH1106_PAGE_COMMAND_SIZE];
+    uint8_t data[SH1106_PAGE_DATA_SIZE];
+    for (uint8_t page = 0; page < SH1106_PAGE_COUNT; ++page) {
+      sh1106_build_page_command(command, page);
+      sh1106_build_page_data(data, blank, page);
+      if (!write_sh1106_message(command, sizeof(command)) ||
+          !write_sh1106_message(data, sizeof(data))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  size_t address_length = 0;
+  const uint8_t *address = ssd1306_address_message(&address_length);
+  uint8_t frame[SSD1306_FRAME_MESSAGE_SIZE];
+  ssd1306_build_frame_message(frame, blank);
+  return write_bytes(address, address_length) &&
+         write_bytes(frame, sizeof(frame));
+}
+
+static bool turn_display_off(void) {
+  if (worker_display_is_st7789()) {
+    bool command_sent = write_st7789_command(0x28);
+    bool backlight_off =
+        backlight_line_fd < 0 || set_output_line(backlight_line_fd, false);
+    return command_sent && backlight_off;
+  }
+
+  static const uint8_t display_off[] = {0x00, 0xae};
+  return worker_display_is_sh1106()
+             ? write_sh1106_message(display_off, sizeof(display_off))
+             : write_bytes(display_off, sizeof(display_off));
+}
+
+void worker_display_shutdown(void) {
+  if (!display_ready) {
+    return;
+  }
+
+  bool cleared = worker_display_is_st7789() ? clear_st7789() : clear_oled();
+  bool powered_off = turn_display_off();
+  if (!cleared || !powered_off) {
+    fprintf(stderr, "virtual-trezor: %s display shutdown failed: %s\n",
+            worker_display_backend_name(), strerror(errno));
+  } else {
+    fprintf(stderr, "virtual-trezor: %s display cleared\n",
+            worker_display_backend_name());
+  }
+  display_ready = false;
+}
+
 static bool initialize_st7789(void) {
   pulse_display_reset();
   size_t count = 0;
@@ -312,8 +365,8 @@ static bool initialize_display(void) {
       return false;
     }
   } else {
-    uint8_t address = worker_display_is_sh1106() ? SH1106_I2C_ADDRESS
-                                                 : SSD1306_I2C_ADDRESS;
+    uint8_t address =
+        worker_display_is_sh1106() ? SH1106_I2C_ADDRESS : SSD1306_I2C_ADDRESS;
     if (ioctl(display_fd, I2C_SLAVE, address) < 0) {
       report_error("I2C address selection");
       return false;
@@ -327,11 +380,10 @@ static bool initialize_display(void) {
   if (worker_display_uses_spi()) {
     fprintf(stderr, "virtual-trezor: %s display %s at %u Hz\n",
             worker_display_backend_name(),
-            error_reported ? "recovered" : "ready",
-            display_spi_speed_hz());
+            error_reported ? "recovered" : "ready", display_spi_speed_hz());
   } else {
-    uint8_t address = worker_display_is_sh1106() ? SH1106_I2C_ADDRESS
-                                                 : SSD1306_I2C_ADDRESS;
+    uint8_t address =
+        worker_display_is_sh1106() ? SH1106_I2C_ADDRESS : SSD1306_I2C_ADDRESS;
     fprintf(stderr, "virtual-trezor: %s display %s at address 0x%02x\n",
             worker_display_backend_name(),
             error_reported ? "recovered" : "ready", address);

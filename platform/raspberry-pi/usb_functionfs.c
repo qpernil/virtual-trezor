@@ -11,9 +11,8 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <fcntl.h>
-#include <linux/usb/functionfs.h>
 #include <limits.h>
+#include <linux/usb/functionfs.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -21,8 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <sys/eventfd.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -32,18 +31,12 @@
 
 #define CONTROL_FD_ENV "USB_GADGET_CONTROL_FD"
 #define STATE_DIRECTORY_ENV "USB_GADGET_STATE_DIRECTORY"
-#define FUNCTIONFS_ENV "USB_GADGET_FUNCTIONFS_TREZOR"
-
 #define UGSP_PACKET_SIZE 8
 #define UGSP_VERSION 1
-#define UGSP_RESOURCES_READY 0x01
-#define UGSP_USB_ATTACHED 0x02
-#define UGSP_USB_DETACHED 0x03
-#define UGSP_SHUTDOWN 0x04
-#define UGSP_FUNCTIONFS_READY 0x81
-#define UGSP_RECONNECT_REQUEST 0x82
-#define UGSP_STOPPED 0x83
-#define UGSP_FATAL 0x84
+#define UGSP_PREBIND_RESOURCES 0x01
+#define UGSP_POSTBIND_RESOURCES 0x02
+#define UGSP_PREPARED 0x81
+#define UGSP_SERVING 0x82
 
 #define OUT_QUEUE_CAPACITY 64
 
@@ -52,7 +45,6 @@ static int ep0_fd = -1;
 static int main_out_fd = -1;
 static int main_in_fd = -1;
 static int packet_event_fd = -1;
-static bool supervisor_attached = false;
 static bool functionfs_enabled = false;
 static volatile char tiny = 0;
 
@@ -66,9 +58,7 @@ static size_t out_queue_count = 0;
 
 static void die_errno(const char *operation);
 
-static bool usb_available(void) {
-  return supervisor_attached && functionfs_enabled;
-}
+static bool usb_available(void) { return functionfs_enabled; }
 
 static void set_functionfs_enabled(bool enabled) {
   int result = pthread_mutex_lock(&endpoint_mutex);
@@ -92,21 +82,11 @@ static void set_functionfs_enabled(bool enabled) {
 
 static void die_errno(const char *operation) {
   fprintf(stderr, "virtual-trezor: %s: %s\n", operation, strerror(errno));
-  if (control_fd >= 0) {
-    const uint8_t packet[UGSP_PACKET_SIZE] = {'U', 'G', 'S', 'P', UGSP_VERSION,
-                                              UGSP_FATAL, 0, 0};
-    (void)send(control_fd, packet, sizeof(packet), MSG_NOSIGNAL);
-  }
   exit(1);
 }
 
 static void die_message(const char *message) {
   fprintf(stderr, "virtual-trezor: %s\n", message);
-  if (control_fd >= 0) {
-    const uint8_t packet[UGSP_PACKET_SIZE] = {'U', 'G', 'S', 'P', UGSP_VERSION,
-                                              UGSP_FATAL, 0, 0};
-    (void)send(control_fd, packet, sizeof(packet), MSG_NOSIGNAL);
-  }
   exit(1);
 }
 
@@ -146,90 +126,56 @@ static void set_worker_environment(void) {
             strerror(errno));
     _exit(1);
   }
-
 }
 
-static void push_u16_le(uint8_t *buffer, size_t *position, uint16_t value) {
-  buffer[(*position)++] = (uint8_t)value;
-  buffer[(*position)++] = (uint8_t)(value >> 8);
-}
-
-static void push_u32_le(uint8_t *buffer, size_t *position, uint32_t value) {
-  buffer[(*position)++] = (uint8_t)value;
-  buffer[(*position)++] = (uint8_t)(value >> 8);
-  buffer[(*position)++] = (uint8_t)(value >> 16);
-  buffer[(*position)++] = (uint8_t)(value >> 24);
-}
-
-static void push_descriptor_set(uint8_t *buffer, size_t *position,
-                                uint8_t interval) {
-  const uint8_t interface[] = {9, 4, 0, 0, 2, 0xff, 0, 0, 1};
-  const uint8_t out_prefix[] = {7, 5, 0x01, 3};
-  const uint8_t in_prefix[] = {7, 5, 0x81, 3};
-  memcpy(buffer + *position, interface, sizeof(interface));
-  *position += sizeof(interface);
-  memcpy(buffer + *position, out_prefix, sizeof(out_prefix));
-  *position += sizeof(out_prefix);
-  push_u16_le(buffer, position, USB_PACKET_SIZE);
-  buffer[(*position)++] = interval;
-  memcpy(buffer + *position, in_prefix, sizeof(in_prefix));
-  *position += sizeof(in_prefix);
-  push_u16_le(buffer, position, USB_PACKET_SIZE);
-  buffer[(*position)++] = interval;
-}
-
-static size_t build_descriptors(uint8_t *buffer, size_t capacity) {
-  const size_t descriptor_length = 20 + (9 + 7 + 7) * 2;
-  if (capacity < descriptor_length) {
-    die_message("internal FunctionFS descriptor buffer is too small");
+static void receive_fd_bundle(uint8_t expected_kind, size_t expected_count,
+                              int *descriptors) {
+  uint8_t packet[UGSP_PACKET_SIZE + 1] = {0};
+  struct iovec iov = {.iov_base = packet, .iov_len = sizeof(packet)};
+  union {
+    struct cmsghdr alignment;
+    uint8_t bytes[CMSG_SPACE(3 * sizeof(int))];
+  } control;
+  memset(&control, 0, sizeof(control));
+  struct msghdr message = {
+      .msg_iov = &iov,
+      .msg_iovlen = 1,
+      .msg_control = control.bytes,
+      .msg_controllen = sizeof(control.bytes),
+  };
+  ssize_t length = recvmsg(control_fd, &message, MSG_CMSG_CLOEXEC);
+  if (length < 0) {
+    die_errno("receive supervisor resource bundle");
   }
-  size_t position = 0;
-  push_u32_le(buffer, &position, FUNCTIONFS_DESCRIPTORS_MAGIC_V2);
-  push_u32_le(buffer, &position, (uint32_t)descriptor_length);
-  push_u32_le(buffer, &position,
-              FUNCTIONFS_HAS_FS_DESC | FUNCTIONFS_HAS_HS_DESC);
-  push_u32_le(buffer, &position, 3);
-  push_u32_le(buffer, &position, 3);
-  push_descriptor_set(buffer, &position, 1);
-  push_descriptor_set(buffer, &position, 4);
-  return position;
-}
-
-static size_t build_strings(uint8_t *buffer, size_t capacity) {
-  static const char interface_name[] = "TREZOR Interface";
-  const size_t strings_length = 16 + 2 + sizeof(interface_name);
-  if (capacity < strings_length) {
-    die_message("internal FunctionFS string buffer is too small");
+  if (length == 0) {
+    exit(0);
   }
-  size_t position = 0;
-  push_u32_le(buffer, &position, FUNCTIONFS_STRINGS_MAGIC);
-  push_u32_le(buffer, &position, (uint32_t)strings_length);
-  push_u32_le(buffer, &position, 1);
-  push_u32_le(buffer, &position, 1);
-  push_u16_le(buffer, &position, 0x0409);
-  memcpy(buffer + position, interface_name, sizeof(interface_name));
-  position += sizeof(interface_name);
-  return position;
-}
-
-static void write_all(int descriptor, const uint8_t *data, size_t length,
-                      const char *operation) {
-  while (length > 0) {
-    ssize_t written = write(descriptor, data, length);
-    if (written > 0) {
-      data += (size_t)written;
-      length -= (size_t)written;
-    } else if (written < 0 && errno == EINTR) {
-      continue;
-    } else {
-      die_errno(operation);
+  size_t declared_count = ((size_t)packet[6] << 8) | packet[7];
+  if (length != UGSP_PACKET_SIZE || memcmp(packet, "UGSP", 4) != 0 ||
+      packet[4] != UGSP_VERSION || packet[5] != expected_kind ||
+      declared_count != expected_count ||
+      (message.msg_flags & (MSG_TRUNC | MSG_CTRUNC)) != 0) {
+    die_message("invalid supervisor resource bundle");
+  }
+  struct cmsghdr *ancillary = CMSG_FIRSTHDR(&message);
+  if (expected_count == 0) {
+    if (ancillary != NULL) {
+      die_message("unexpected descriptors in empty supervisor resource bundle");
     }
+    return;
   }
+  if (ancillary == NULL || ancillary->cmsg_level != SOL_SOCKET ||
+      ancillary->cmsg_type != SCM_RIGHTS ||
+      ancillary->cmsg_len != CMSG_LEN(expected_count * sizeof(int)) ||
+      CMSG_NXTHDR(&message, ancillary) != NULL) {
+    die_message("malformed SCM_RIGHTS supervisor resource bundle");
+  }
+  memcpy(descriptors, CMSG_DATA(ancillary), expected_count * sizeof(int));
 }
 
 static void send_control(uint8_t kind) {
-  const uint8_t packet[UGSP_PACKET_SIZE] = {'U', 'G', 'S', 'P', UGSP_VERSION,
-                                            kind, 0, 0};
+  const uint8_t packet[UGSP_PACKET_SIZE] = {'U',          'G',  'S', 'P',
+                                            UGSP_VERSION, kind, 0,   0};
   ssize_t length = send(control_fd, packet, sizeof(packet), MSG_NOSIGNAL);
   if (length != (ssize_t)sizeof(packet)) {
     die_errno("send supervisor-control message");
@@ -237,7 +183,7 @@ static void send_control(uint8_t kind) {
 }
 
 static uint8_t receive_control(int flags) {
-  uint8_t packet[UGSP_PACKET_SIZE + 1];
+  uint8_t packet[UGSP_PACKET_SIZE + 1] = {0};
   ssize_t length = recv(control_fd, packet, sizeof(packet), flags);
   if (length < 0) {
     if ((flags & MSG_DONTWAIT) != 0 &&
@@ -247,7 +193,7 @@ static uint8_t receive_control(int flags) {
     die_errno("receive supervisor-control message");
   }
   if (length == 0) {
-    die_message("supervisor-control channel closed");
+    exit(0);
   }
   if (length != UGSP_PACKET_SIZE || memcmp(packet, "UGSP", 4) != 0 ||
       packet[4] != UGSP_VERSION || packet[6] != 0 || packet[7] != 0) {
@@ -256,40 +202,10 @@ static uint8_t receive_control(int flags) {
   return packet[5];
 }
 
-static void stop_worker(void) __attribute__((noreturn));
-
-static void stop_worker(void) {
-  send_control(UGSP_STOPPED);
-  exit(0);
-}
-
 static void handle_control_message(uint8_t kind) {
-  switch (kind) {
-    case 0:
-      return;
-    case UGSP_USB_ATTACHED:
-      supervisor_attached = true;
-      return;
-    case UGSP_USB_DETACHED:
-      supervisor_attached = false;
-      return;
-    case UGSP_SHUTDOWN:
-      stop_worker();
-    default:
-      die_message("unexpected supervisor-control message");
+  if (kind != 0) {
+    die_message("unexpected runtime supervisor-control message");
   }
-}
-
-static int open_endpoint(const char *root, const char *name, int flags) {
-  char path[PATH_MAX];
-  if (snprintf(path, sizeof(path), "%s/%s", root, name) >= (int)sizeof(path)) {
-    die_message("FunctionFS endpoint path is too long");
-  }
-  int descriptor = open(path, flags | O_NONBLOCK | O_CLOEXEC);
-  if (descriptor < 0) {
-    die_errno(path);
-  }
-  return descriptor;
 }
 
 static void drain_ep0(void) {
@@ -316,20 +232,20 @@ static void drain_ep0(void) {
   size_t count = (size_t)length / sizeof(events[0]);
   for (size_t i = 0; i < count; i++) {
     switch (events[i].type) {
-      case FUNCTIONFS_ENABLE:
-      case FUNCTIONFS_RESUME:
-        set_functionfs_enabled(true);
-        break;
-      case FUNCTIONFS_DISABLE:
-      case FUNCTIONFS_UNBIND:
-        set_functionfs_enabled(false);
-        break;
-      case FUNCTIONFS_BIND:
-      case FUNCTIONFS_SETUP:
-      case FUNCTIONFS_SUSPEND:
-        break;
-      default:
-        die_message("unknown FunctionFS control event");
+    case FUNCTIONFS_ENABLE:
+    case FUNCTIONFS_RESUME:
+      set_functionfs_enabled(true);
+      break;
+    case FUNCTIONFS_DISABLE:
+    case FUNCTIONFS_UNBIND:
+      set_functionfs_enabled(false);
+      break;
+    case FUNCTIONFS_BIND:
+    case FUNCTIONFS_SETUP:
+    case FUNCTIONFS_SUSPEND:
+      break;
+    default:
+      die_message("unknown FunctionFS control event");
     }
   }
 }
@@ -453,12 +369,13 @@ static bool write_packet(const uint8_t *packet) {
       continue;
     }
     if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-      struct pollfd fds[2] = {{.fd = control_fd, .events = POLLIN},
-                              {.fd = main_in_fd, .events = POLLOUT}};
+      struct pollfd fds[2] = {
+          {.fd = control_fd, .events = POLLIN | POLLHUP | POLLERR},
+          {.fd = main_in_fd, .events = POLLOUT}};
       if (poll(fds, 2, 10) < 0 && errno != EINTR) {
         die_errno("poll FunctionFS input endpoint");
       }
-      if ((fds[0].revents & POLLIN) != 0) {
+      if ((fds[0].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
         handle_control_message(receive_control(MSG_DONTWAIT));
       }
       continue;
@@ -487,27 +404,11 @@ static void flush_messages(void) {
 
 void usbInit(void) {
   control_fd = parse_fd_environment(CONTROL_FD_ENV);
-  if (receive_control(0) != UGSP_RESOURCES_READY) {
-    die_message("supervisor did not send RESOURCES_READY");
-  }
-
-  const char *functionfs = getenv(FUNCTIONFS_ENV);
-  if (functionfs == NULL || functionfs[0] != '/') {
-    die_message("missing absolute FunctionFS mount path");
-  }
-  ep0_fd = open_endpoint(functionfs, "ep0", O_RDWR);
-
-  uint8_t descriptors[80];
-  size_t descriptor_length = build_descriptors(descriptors, sizeof(descriptors));
-  write_all(ep0_fd, descriptors, descriptor_length,
-            "write FunctionFS descriptors");
-
-  uint8_t strings[64];
-  size_t strings_length = build_strings(strings, sizeof(strings));
-  write_all(ep0_fd, strings, strings_length, "write FunctionFS strings");
-
-  main_out_fd = open_endpoint(functionfs, "ep1", O_RDONLY);
-  main_in_fd = open_endpoint(functionfs, "ep2", O_WRONLY);
+  int prebind[3];
+  receive_fd_bundle(UGSP_PREBIND_RESOURCES, 3, prebind);
+  ep0_fd = prebind[0];
+  main_out_fd = prebind[1];
+  main_in_fd = prebind[2];
   packet_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
   if (packet_event_fd < 0) {
     die_errno("create FunctionFS packet event");
@@ -524,25 +425,24 @@ void usbInit(void) {
     die_errno("detach FunctionFS OUT reader");
   }
 
-  send_control(UGSP_FUNCTIONFS_READY);
-  if (receive_control(0) != UGSP_USB_ATTACHED) {
-    die_message("supervisor did not send USB_ATTACHED");
-  }
-  supervisor_attached = true;
-  fputs("virtual-trezor: FunctionFS main interface attached\n", stderr);
+  send_control(UGSP_PREPARED);
+  receive_fd_bundle(UGSP_POSTBIND_RESOURCES, 0, NULL);
+  send_control(UGSP_SERVING);
+  fputs("virtual-trezor: inherited FunctionFS interface is serving\n", stderr);
 }
 
 void waitAndProcessUSBRequests(uint32_t millis) {
   emulatorPoll();
 
-  struct pollfd fds[3] = {{.fd = control_fd, .events = POLLIN},
-                          {.fd = ep0_fd, .events = POLLIN},
-                          {.fd = packet_event_fd, .events = POLLIN}};
+  struct pollfd fds[3] = {
+      {.fd = control_fd, .events = POLLIN | POLLHUP | POLLERR},
+      {.fd = ep0_fd, .events = POLLIN},
+      {.fd = packet_event_fd, .events = POLLIN}};
   int ready = poll(fds, 3, (int)millis);
   if (ready < 0 && errno != EINTR) {
     die_errno("poll FunctionFS endpoints");
   }
-  if (ready > 0 && (fds[0].revents & POLLIN) != 0) {
+  if (ready > 0 && (fds[0].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
     handle_control_message(receive_control(MSG_DONTWAIT));
   }
   if (ready > 0 && (fds[1].revents & POLLIN) != 0) {
@@ -558,9 +458,9 @@ void waitAndProcessUSBRequests(uint32_t millis) {
 void usbPoll(void) { waitAndProcessUSBRequests(0); }
 
 void usbReconnect(void) {
-  if (control_fd >= 0) {
-    send_control(UGSP_RECONNECT_REQUEST);
-  }
+  fputs("virtual-trezor: USB reconnect requested; ending worker incarnation\n",
+        stderr);
+  exit(0);
 }
 
 char usbTiny(char set) {
@@ -571,12 +471,13 @@ char usbTiny(char set) {
 
 void usbFlush(uint32_t millis) {
   flush_messages();
-  struct pollfd control = {.fd = control_fd, .events = POLLIN};
+  struct pollfd control = {.fd = control_fd,
+                           .events = POLLIN | POLLHUP | POLLERR};
   int ready = poll(&control, 1, (int)millis);
   if (ready < 0 && errno != EINTR) {
     die_errno("wait while flushing FunctionFS endpoint");
   }
-  if (ready > 0 && (control.revents & POLLIN) != 0) {
+  if (ready > 0 && (control.revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
     handle_control_message(receive_control(MSG_DONTWAIT));
   }
 }

@@ -1,151 +1,75 @@
-# Raspberry Pi FunctionFS validation
+# Raspberry Pi Validation
 
-## Verified deployment
+Use this checklist for each Virtual Trezor profile after building the worker
+and installing the matching supervisor.
 
-| Item | Value |
-| --- | --- |
-| Date | 2026-08-19 |
-| Host | Raspberry Pi, aarch64 |
-| OS | Debian GNU/Linux 13 (trixie) |
-| Upstream firmware | Trezor One `legacy/v1.14.1` at `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Worker SHA-256 | `24adce5d10be9c7b68453f8347e23de8f3bce137e852708c2c78ad0dad2ac0aa` |
-| Supervisor service during I2C validation | `usb-gadget-supervisor@virtual-trezor-i2c.service` |
-| USB device controller | `fe980000.usb`, state `configured` |
-| FunctionFS mount | `trezor` at `/dev/ffs-virtual-trezor` |
-
-The root supervisor created ConfigFS and FunctionFS resources, bound the USB
-device controller, and launched the firmware worker as the unprivileged user
-`per`. The worker inherited the supervisor control socket and FunctionFS mount,
-published its descriptors, and opened the endpoint files itself. The current
-worker drives I2C or SPI and GPIO through additional supervisor-opened
-descriptors.
-
-## Build
-
-The Pi build used GCC, the pinned upstream `uv` environment, and package-managed
-`grpcio-tools==1.81.0`, which provides `libprotoc 33.5`:
+## Build and profile
 
 ```sh
+make check
 make worker
+/opt/usb-gadget-supervisor/usb-gadget-supervisor --check-profile \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
-The build used the upstream legacy firmware Makefile for the real firmware
-object list. `mk/worker-firmware.mk` supplies project objects for the
-firmware's expected USB, display, and button symbols. The emulator support
-archive is constructed only from setup, memory, timer, and string compatibility
-objects. The final worker contains FunctionFS/I2C/SPI/GPIO platform symbols
-and neither upstream `emulatorSocket` implementation nor SDL.
+Confirm the worker binary has no SDL/X11 dependencies and the selected profile
+contains the intended USB identity, FunctionFS blobs, display resource nodes,
+and worker arguments.
 
-The clean Git-backed ARM64 build linked only `libc.so.6`. `ldd`, ELF `NEEDED`
-entries, and a binary-string audit found no SDL, SDL_image, X11, Xwayland, or
-XRandR dependency.
+## USB enumeration and traffic
 
-## USB and protocol results
+Start the selected service with a data-capable host connection. Confirm:
 
-The gadget enumerated on macOS at full speed with:
+- UDC state becomes `configured`;
+- the host sees full-speed `1209:53c1`, product `Virtual Trezor`, and the
+  selected serial;
+- the main interface exposes 64-byte interrupt OUT and IN endpoints;
+- `trezorctl` discovers the device and reads model `1` firmware features;
+- a multi-packet ping round-trips unchanged; and
+- Trezor Suite reaches its expected firmware-check and confirmation workflow.
 
-| Field | Observed value |
-| --- | --- |
-| Vendor/product | `1209:53c1` |
-| Manufacturer at validation time | `SatoshiLabs` |
-| Product at validation time | `TREZOR` |
-| Serial | `virtual-trezor-one` |
-| Device release | `0x0100` |
+The unsigned Linux worker is not authenticated production firmware, so host
+software may deliberately reject protected wallet operations.
 
-This table is a historical validation record. The current profiles use
-`Virtual Trezor` for both descriptor strings while retaining the compatibility
-VID/PID and firmware version.
+## Descriptor-capability boundary
 
-The pinned `trezorlib` WebUSB transport discovered `webusb:001:1:4`, opened the
-real USB endpoints, and received these unmodified firmware features:
+Inspect the running worker and confirm:
 
-```text
-vendor=trezor.io
-model=1
-firmware=1.14.1
-initialized=False
-capabilities=Bitcoin,Bitcoin_like,Crypto,Ethereum,NEM,Stellar,U2F
-```
+- it runs as the configured non-root account;
+- it holds the control socket, FunctionFS `ep0`, OUT, and IN descriptors;
+- it has no FunctionFS path environment variable and never opens `/dev/ffs-*`;
+- `ep0` `ENABLE`, `DISABLE`, `UNBIND`, and `SETUP` events control runtime state;
+- I2C/SPI/GPIO access exists only through profile-approved inherited FDs; and
+- FunctionFS remains root-owned.
 
-A no-protection ping with a 173-byte message returned the identical payload.
-That exercises both OUT and IN traffic across multiple 64-byte FunctionFS
-interrupt transfers, not merely descriptor enumeration.
+## Incarnation recovery
 
-After deployment of the headless worker, host discovery again reported the
-Trezor One over WebUSB and a fresh `headless-i2c-gpio-ok` ping round-tripped
-unchanged. The SH1106 target renderer received 121 complete startup frames,
-with no local display process in the worker.
+Send `SIGKILL` to the worker without stopping the supervisor. The same
+supervisor process must unbind, remove the old gadget and mount, start a fresh
+worker with fresh FDs, rebind, and return the UDC to `configured`.
 
-Display recovery was fault-injected by removing the Pi 3 I2C target before
-worker startup. The worker logged an initialization `EIO` while FunctionFS and
-USB still attached normally. When the target was restored 21 seconds later,
-`emulatorPoll` reinitialized SH1106 without a worker restart or a new UI
-refresh. The target received exactly 1,092 bytes: 28 initialization bytes plus
-one complete 1,064-byte framebuffer, with zero receive overruns or ring drops.
+Exercise `usbReconnect()` and confirm it produces the same complete
+fresh-process cycle. Stopping the systemd service must instead perform final
+teardown without creating another incarnation.
 
-The deployed adapter was subsequently tested against the host lifecycle used
-by Trezor Suite. A challenged `GetFirmwareHash` returned 32 bytes in 0.246
-seconds; the host then closed the FunctionFS interface, reopened it, and
-completed a new ping without restarting the service. The adapter consumes
-FunctionFS `ENABLE`/`DISABLE` events so a host interface reset cannot leave the
-worker logically detached.
+## Display and buttons
 
-Trezor Suite recognizes the gadget and reaches its firmware check and
-on-device confirmation workflow. It correctly warns that the firmware check
-does not authenticate this Linux worker as an official signed embedded image.
+For the selected profile, confirm the genuine 128x64 upstream framebuffer is
+visible and both active-low firmware buttons work:
 
-A protected ping was used to verify interactive behavior. While the host
-waited on a `ProtectCall` button request, a dedicated FunctionFS reader thread
-remained blocked in the kernel and the main firmware thread continued polling
-buttons. The second-Pi virtual-display client held the appropriate GPIO line
-low for the duration of a mouse press, producing the genuine upstream button
-press/release transition and completing the request. Left, right, and both-
-button input are represented by the two independent active-low lines.
+- SH1106 SPI: GPIO24 data/command, GPIO25 reset, SPI0 CE0;
+- SSD1306/SH1106 I2C: `/dev/i2c-1`, address `0x3c`;
+- ST7789 SPI: GPIO25 data/command, GPIO27 reset, GPIO24 backlight; and
+- buttons: GPIO5, GPIO26, with GPIO13 center mapped to both.
 
-## Physical SPI HAT validation
-
-Both Waveshare HAT variants were subsequently validated on Raspberry Pi 4.
-The 128x64 SH1106 OLED rendered the genuine legacy framebuffer and its
-GPIO5/GPIO26/GPIO13 joystick supplied left, right, and simultaneous-button
-input. A complete wallet setup was exercised through Trezor Suite.
-
-The alternate 240x240 ST7789 HAT was validated with the same joystick mapping.
-The backend decodes and scales the unchanged 128x64 framebuffer to a centered
-240x120 RGB565 window. Its standalone pattern confirmed reset, backlight,
-orientation, address-window construction, and SPI transfer. At 62.5 MHz, 100
-complete conversions and physical frame writes took 899.4 ms: 8.99 ms/frame,
-or 111.2 frames/s. The full FunctionFS worker then displayed the upstream
-startup and wallet-setup UI correctly on the physical panel.
-
-## Coexistence with other gadget profiles
-
-The Virtual Trezor worker and profile may remain installed beside Virtual
-YubiKey. They are selectable profiles, not simultaneous independent devices:
-only one supervisor instance can own the Pi's single UDC at a time. Switching
-profiles requires stopping the active gadget, allowing supervisor cleanup,
-and then starting the other profile. Two Pis can expose the two identities
-concurrently.
+Fault-inject a display disconnect. USB must remain operational, and the regular
+firmware polling path must reinitialize and retransmit the current framebuffer
+after the resource returns.
 
 ## Known limitations
 
-- Only the main vendor interface is published. The firmware advertises U2F,
-  but the separate U2F HID interface is not yet exposed.
-- Additional recovery/setup variants still require interactive validation.
-- The required SSD1306/SH1106 I2C backend and GPIO button backend are deployed.
-  SSD1306 transferred complete frames to two Pi 3 targets
-  at a measured 400 kHz with zero receive overruns or drops. SH1106 produced
-  two deterministic captures of 139,412 bytes each: 28 initialization bytes
-  plus 131 complete 1,064-byte page-addressed refreshes. Target-side rendering
-  remote button control, and the physical OLED/button HAT are validated.
-  The real Trezor One OLED
-  is SPI; this I2C stream is a Raspberry Pi adaptation around the unchanged
-  upstream framebuffer. See [`i2c-display-plan.md`](i2c-display-plan.md).
-- The default SH1106 SPI profile and alternate ST7789 SPI profile are deployed
-  and physically validated. The ST7789's RGB565 transfer remains synchronous
-  with `oledRefresh`; firmware animation delays therefore include the measured
-  frame-write time. Dirty-region updates are a possible future refinement.
-- The profile requests USB BCD `0x0210`, matching current Trezor One firmware,
-  but this deployed supervisor/gadget instance reported `0x0200`. Main WebUSB
-  communication works; BOS/WebUSB descriptor parity still needs review.
-- Emulator file storage and `rand_insecure.c` remain in use. This build is not
-  suitable for real seeds, funds, credentials, or production cryptography.
+- Only the main vendor interface is exposed; the separate U2F HID interface is
+  not present.
+- Emulator file storage and development randomness remain software resources.
+- The appliance does not provide physical Trezor security or firmware
+  authenticity.
