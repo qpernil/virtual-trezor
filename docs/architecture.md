@@ -32,9 +32,11 @@ display refresh:
   renderer.
 
 The Pi worker excludes `legacy/emulator/oled.c`. Project-owned `oledInit` and
-`oledRefresh` implementations send the existing framebuffer directly to an
-explicitly selected SSD1306 or SH1106 controller through an I2C or SPI
-descriptor received in the pre-bind bundle. `emulatorPoll` remains a platform ABI symbol because the
+`oledRefresh` implementations pass the existing framebuffer and inherited
+bus/GPIO descriptors through the C ABI of the sibling `display-backends`
+library. The library owns controller initialization, signaling, bus writes,
+frame conversion, clearing, and display-off. The Trezor adapter retains
+selection, retry, timing, and logging policy. `emulatorPoll` remains a platform ABI symbol because the
 upstream firmware loop calls it in emulator builds. In this implementation it
 retries a failed display transfer after one second, reinitializing the
 controller and retransmitting the current framebuffer independently of later
@@ -78,8 +80,8 @@ supplies explicit rules for the project platform objects. The expected `udp.o`
 is compiled from `platform/raspberry-pi/usb_functionfs.c`. The derived emulator
 support archive is constructed only from `setup.o`, `memory.o`, `timer.o`, and
 `strl.o`. Project objects provide USB, display, buttons, and worker entry/config
-symbols. Neither upstream datagram implementation nor an SDL object is present
-in the worker.
+symbols. Controller mechanics come from the Rust static library. Neither
+upstream datagram implementation nor an SDL object is present in the worker.
 
 ## Milestones
 

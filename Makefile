@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := check
 
 .PHONY: all check check-platform check-upstream check-worker-boundary init \
-	init-baseline st7789-test upstream-baseline worker
+	init-baseline upstream-baseline worker
 
 all: check
 
@@ -24,10 +24,10 @@ check-worker-boundary:
 	@grep -q 'receive_fd_bundle(UGSP_PREBIND_RESOURCES, 6' platform/raspberry-pi/usb_functionfs.c
 	@grep -q 'GPIO_V2_LINE_GET_VALUES_IOCTL' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'workerButtonLinesFd' platform/raspberry-pi/buttons_gpio.c
-	@grep -q 'workerDisplayResourceFd' platform/raspberry-pi/display_linux.c
-	@grep -q 'workerDisplayControlFd' platform/raspberry-pi/display_linux.c
+	@grep -q 'display_backends_create' platform/raspberry-pi/display_linux.c
+	@grep -q 'display_backends_write_trezor_frame' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_ST7789_SPI' platform/raspberry-pi/worker_config.h
-	@grep -q 'platform_st7789.o' mk/worker-firmware.mk
+	@grep -q 'libdisplay_backends.a' mk/worker-firmware.mk
 	@test -x tools/protoc
 	@! grep -R -q '#include <SDL' platform/raspberry-pi/buttons_gpio.c \
 		platform/raspberry-pi/display_linux.c
@@ -39,30 +39,12 @@ check-platform:
 	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-Iplatform/raspberry-pi \
 		platform/raspberry-pi/worker_config.c \
-		platform/raspberry-pi/sh1106_stream.c \
-		platform/raspberry-pi/ssd1306_stream.c \
-		platform/raspberry-pi/st7789.c \
-		tests/test_display_stream.c \
-		-o build/tests/test_display_stream
-	@build/tests/test_display_stream
+		tests/test_platform_config.c \
+		-o build/tests/test_platform_config
+	@build/tests/test_platform_config
 
 upstream-baseline: check-upstream
 	./scripts/build-upstream-baseline.sh
 
 worker: check
 	./scripts/build-pi-worker.sh
-
-st7789-test:
-	@if [[ "$$(uname -s)" != Linux ]]; then \
-		echo "The standalone ST7789 test requires Linux." >&2; exit 1; \
-	fi
-	@mkdir -p build
-	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -pedantic \
-		-Iplatform/raspberry-pi -Iupstream/trezor-firmware/legacy \
-		-Iupstream/trezor-firmware/legacy/gen \
-		platform/raspberry-pi/display_linux.c \
-		platform/raspberry-pi/worker_config.c \
-		platform/raspberry-pi/sh1106_stream.c \
-		platform/raspberry-pi/ssd1306_stream.c \
-		platform/raspberry-pi/st7789.c \
-		tools/st7789-test.c -o build/st7789-test

@@ -6,6 +6,8 @@
 
 WORKER_OVERLAY := $(lastword $(MAKEFILE_LIST))
 PROJECT_ROOT := $(abspath $(dir $(WORKER_OVERLAY))/..)
+DISPLAY_BACKENDS_DIR ?= $(abspath $(PROJECT_ROOT)/../display-backends)
+DISPLAY_BACKENDS_LIB := $(DISPLAY_BACKENDS_DIR)/target/release/libdisplay_backends.a
 
 include Makefile
 
@@ -14,14 +16,14 @@ SDL_LDLIBS := $(shell pkg-config --libs sdl2 SDL2_image 2>/dev/null)
 CFLAGS := $(filter-out $(SDL_CFLAGS),$(CFLAGS))
 LDLIBS := $(filter-out $(SDL_LDLIBS),$(LDLIBS))
 CFLAGS += -pthread
+CFLAGS += -I$(DISPLAY_BACKENDS_DIR)/include
 LDFLAGS += -pthread
+LDLIBS += $(DISPLAY_BACKENDS_LIB) -ldl -lm
 OBJS += platform_buttons.o platform_display.o platform_main.o \
-	platform_worker_config.o platform_sh1106_stream.o \
-	platform_ssd1306_stream.o platform_st7789.o
+	platform_worker_config.o
 
 $(NAME).elf: platform_buttons.o platform_display.o platform_main.o \
-	platform_worker_config.o platform_sh1106_stream.o \
-	platform_ssd1306_stream.o platform_st7789.o
+	platform_worker_config.o $(DISPLAY_BACKENDS_LIB)
 
 trezor.o: trezor.c
 	@printf "  CC      %s (renamed upstream entry point)\n" "$@"
@@ -47,20 +49,5 @@ platform_main.o: $(PROJECT_ROOT)/platform/raspberry-pi/worker_main.c
 
 platform_worker_config.o: $(PROJECT_ROOT)/platform/raspberry-pi/worker_config.c
 	@printf "  CC      %s (worker configuration)\n" "$@"
-	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
-		-MMD -MP -o $@ -c $<
-
-platform_ssd1306_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/ssd1306_stream.c
-	@printf "  CC      %s (SSD1306 stream)\n" "$@"
-	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
-		-MMD -MP -o $@ -c $<
-
-platform_sh1106_stream.o: $(PROJECT_ROOT)/platform/raspberry-pi/sh1106_stream.c
-	@printf "  CC      %s (SH1106 stream)\n" "$@"
-	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
-		-MMD -MP -o $@ -c $<
-
-platform_st7789.o: $(PROJECT_ROOT)/platform/raspberry-pi/st7789.c
-	@printf "  CC      %s (ST7789 stream)\n" "$@"
 	$(Q)$(CC) $(CFLAGS) -I$(PROJECT_ROOT)/platform/raspberry-pi \
 		-MMD -MP -o $@ -c $<
