@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-/* Trezor framebuffer policy over the shared display-backends C ABI. */
+/* Firmware framebuffer policy over the shared display-backends C ABI. */
 
 #include <limits.h>
 #include <stdbool.h>
@@ -15,6 +15,9 @@
 #include "worker_config.h"
 
 #define RETRY_DELAY_MS 1000
+#define FRAME_WIDTH 128
+#define FRAME_HEIGHT 64
+#define FRAME_STRIDE 128
 #define TREZOR_FRAMEBUFFER_SIZE 1024
 
 static DisplayBackendsHandle *display = NULL;
@@ -86,8 +89,9 @@ static void write_framebuffer(void) {
     return;
   }
 
-  int error = display_backends_write_trezor_frame(
-      display, oledGetBuffer(), TREZOR_FRAMEBUFFER_SIZE);
+  int error = display_backends_write_frame(
+      display, DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE, FRAME_WIDTH,
+      FRAME_HEIGHT, FRAME_STRIDE, oledGetBuffer(), TREZOR_FRAMEBUFFER_SIZE);
   if (error != 0) {
     report_error("frame write", error);
   }

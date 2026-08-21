@@ -25,7 +25,8 @@ check-worker-boundary:
 	@grep -q 'GPIO_V2_LINE_GET_VALUES_IOCTL' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'workerButtonLinesFd' platform/raspberry-pi/buttons_gpio.c
 	@grep -q 'display_backends_create' platform/raspberry-pi/display_linux.c
-	@grep -q 'display_backends_write_trezor_frame' platform/raspberry-pi/display_linux.c
+	@grep -q 'DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE' platform/raspberry-pi/display_linux.c
+	@grep -q 'display_backends_write_frame' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_ST7789_SPI' platform/raspberry-pi/worker_config.h
 	@grep -q 'libdisplay_backends.a' mk/worker-firmware.mk
 	@test -x tools/protoc
