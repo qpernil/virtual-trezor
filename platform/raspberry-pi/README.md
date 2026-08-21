@@ -20,8 +20,11 @@ The current replacement surface is:
 The installed profile declares one vendor-specific main interface with 64-byte
 interrupt IN and OUT endpoints. The supervisor publishes it and transfers
 `ep0`, OUT, and IN in a fixed pre-bind bundle; the worker never opens the
-FunctionFS mount. DebugLink is disabled. The separate U2F HID interface is
-deferred until the main Trezor/Suite transport is validated.
+FunctionFS mount. Microsoft OS 1.0 descriptors associate interface zero with
+Windows' inbox WinUSB driver, and a separate BOS platform capability announces
+WebUSB 1.0. Neither changes the endpoint bundle seen by the worker. DebugLink
+is disabled. The separate U2F HID interface is deferred until the main
+Trezor/Suite transport is validated.
 
 The implementation intentionally processes one FunctionFS OUT packet per poll
 cycle. FunctionFS endpoint reads can block when a second packet is not queued,

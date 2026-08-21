@@ -119,6 +119,12 @@ should match the non-debug interfaces expected from the selected upstream
 model, including any separately described HID function. Debug interfaces must
 remain disabled in the normal profile.
 
+The supervisor's Microsoft OS 1.0 and WebUSB profile support is reusable for
+this worker. The Safe 3 profile must nevertheless derive its VID/PID,
+interface ordering, WinUSB compatible IDs or successor Microsoft descriptors,
+interface GUIDs, BOS capabilities, and vendor request codes from the selected
+Safe 3 firmware rather than copying the legacy Trezor One byte table.
+
 Worker startup, readiness, shutdown, supervisor loss, and endpoint recovery
 must use the existing fixed-descriptor supervisor protocol rather than adding
 a model-specific privileged control path.

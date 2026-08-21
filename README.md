@@ -98,8 +98,14 @@ expected firmware-integrity failure and refuses cryptocurrency transaction
 operations because this worker is not authenticated production firmware.
 Recovery remains unvalidated.
 The FunctionFS descriptor set currently exposes only the main Trezor vendor
-interface, so the separate U2F HID interface is also pending. A real Trezor
-One uses SPI for its OLED. The physical-HAT backend therefore preserves that
+interface, so the separate U2F HID interface is also pending. The same blob
+associates interface zero with Windows' inbox WinUSB driver through Microsoft
+OS 1.0 compatible-ID and interface-GUID descriptors. The supervisor also
+publishes the upstream-compatible WebUSB BOS capability, without a landing
+page. WinUSB supplies the Windows driver; WebUSB separately enables
+permissioned browser discovery and access.
+
+A real Trezor One uses SPI for its OLED. The physical-HAT backend therefore preserves that
 transport style, while I2C remains an intentional Raspberry Pi adaptation for
 the virtual display and future I2C-native modules. Both retain the genuine
 upstream framebuffer and UI composition.
