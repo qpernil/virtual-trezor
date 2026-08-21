@@ -2,11 +2,13 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/gpio.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #include "st7789.h"
@@ -15,13 +17,13 @@
 
 static uint8_t framebuffer[ST7789_SOURCE_FRAMEBUFFER_SIZE];
 static int display_resource_fd = -1;
-static int gpio_resource_fd = -1;
+static int display_control_fd = -1;
 
 const uint8_t *oledGetBuffer(void) { return framebuffer; }
 void oledInit(void);
 void oledRefresh(void);
 int workerDisplayResourceFd(void) { return display_resource_fd; }
-int workerGpioResourceFd(void) { return gpio_resource_fd; }
+int workerDisplayControlFd(void) { return display_control_fd; }
 
 static void fail(const char *operation) {
   fprintf(stderr, "st7789-test: %s: %s\n", operation, strerror(errno));
@@ -72,10 +74,21 @@ int main(int argc, char **argv) {
   if (display_resource_fd < 0) {
     fail(spi_path);
   }
-  gpio_resource_fd = open(gpio_path, O_RDWR | O_CLOEXEC);
-  if (gpio_resource_fd < 0) {
+  int gpiochip_fd = open(gpio_path, O_RDWR | O_CLOEXEC);
+  if (gpiochip_fd < 0) {
     fail(gpio_path);
   }
+  struct gpio_v2_line_request request = {
+      .offsets = {25, 27, 24},
+      .consumer = "st7789-test",
+      .config.flags = GPIO_V2_LINE_FLAG_OUTPUT,
+      .num_lines = 3,
+  };
+  if (ioctl(gpiochip_fd, GPIO_V2_GET_LINE_IOCTL, &request) != 0) {
+    fail("request ST7789 control GPIOs");
+  }
+  display_control_fd = request.fd;
+  close(gpiochip_fd);
 
   char error[160];
   char *arguments[] = {"st7789-test", "--display=st7789-spi"};

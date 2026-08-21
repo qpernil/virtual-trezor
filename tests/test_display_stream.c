@@ -20,17 +20,11 @@ static void set_legacy_pixel(uint8_t framebuffer[ST7789_SOURCE_FRAMEBUFFER_SIZE]
 }
 
 int main(void) {
-  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE |
-                             BUTTON_GPIO_CENTER_LINE) == 0);
-  assert(button_gpio_pressed(BUTTON_GPIO_YES_LINE |
-                             BUTTON_GPIO_CENTER_LINE) ==
-         BUTTON_GPIO_NO_PRESSED);
-  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE |
-                             BUTTON_GPIO_CENTER_LINE) ==
+  assert(button_gpio_pressed(0) == 0);
+  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE) == BUTTON_GPIO_NO_PRESSED);
+  assert(button_gpio_pressed(BUTTON_GPIO_YES_LINE) ==
          BUTTON_GPIO_YES_PRESSED);
-  assert(button_gpio_pressed(BUTTON_GPIO_NO_LINE | BUTTON_GPIO_YES_LINE) ==
-         (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
-  assert(button_gpio_pressed(0) ==
+  assert(button_gpio_pressed(BUTTON_GPIO_CENTER_LINE) ==
          (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
 
   static const uint8_t expected_init[] = {

@@ -3,8 +3,9 @@
 ## Process boundary
 
 `usb-gadget-supervisor` creates the USB gadget, validates and publishes the
-profile's FunctionFS descriptors, opens the resulting endpoints and any
-declared I2C/SPI/GPIO resources, drops privileges, and launches this worker.
+profile's FunctionFS descriptors, opens the resulting endpoints and declared
+I2C/SPI devices, claims exact GPIO line groups, drops privileges, and launches
+this worker.
 The worker receives `ep0`, OUT, and IN as open file descriptors and owns all
 runtime USB traffic. It opens no USB path. The supervisor does not interpret
 Trezor messages or proxy secret material.
@@ -47,11 +48,18 @@ not replace Trezor's own layout, font, bitmap, or drawing routines.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies
-only `buttonRead`, sampling active-low GPIO5 and GPIO26 through the
-supervisor-opened GPIO chip descriptor. On the physical HAT, active-low GPIO13
-maps the joystick center press to both logical Trezor buttons. The original two
-lines may instead be driven by the remote virtual-display process, whose
-middle click pulls both low.
+only `buttonRead`, receiving one line-request handle ordered as No, Yes, and
+center. The profile maps that group to active-low GPIO5, GPIO26, and GPIO13 with
+pull-ups and both-edge events. The kernel therefore exposes logical pressed
+bits and a pollable event stream without giving the worker GPIO-chip access.
+On the physical HAT, center maps to both logical Trezor buttons. The original
+two lines may instead be driven by the remote virtual-display process, whose
+middle click activates both.
+
+The platform wait blocks indefinitely on USB, lifecycle, packet, and button
+descriptors while the display is healthy and no button is held. A display
+failure arms only the retry deadline, while an active button keeps the
+firmware's 10 ms debounce/hold cadence. There is no idle GPIO sampling loop.
 
 USB has two emulator-specific layers that must both be excluded:
 

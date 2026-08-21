@@ -17,14 +17,13 @@ enum {
 };
 
 static inline uint8_t button_gpio_pressed(uint64_t line_values) {
-  const int center_pressed =
-      (line_values & BUTTON_GPIO_CENTER_LINE) == 0;
+  const int center_pressed = (line_values & BUTTON_GPIO_CENTER_LINE) != 0;
   uint8_t pressed = 0;
 
-  if (center_pressed || (line_values & BUTTON_GPIO_NO_LINE) == 0) {
+  if (center_pressed || (line_values & BUTTON_GPIO_NO_LINE) != 0) {
     pressed |= BUTTON_GPIO_NO_PRESSED;
   }
-  if (center_pressed || (line_values & BUTTON_GPIO_YES_LINE) == 0) {
+  if (center_pressed || (line_values & BUTTON_GPIO_YES_LINE) != 0) {
     pressed |= BUTTON_GPIO_YES_PRESSED;
   }
   return pressed;

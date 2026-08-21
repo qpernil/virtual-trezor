@@ -26,6 +26,8 @@
 #include <unistd.h>
 
 #include "messages.h"
+#include "buttons_gpio.h"
+#include "display_linux.h"
 #include "usb.h"
 #include "usb_functionfs.h"
 
@@ -45,7 +47,8 @@ static int ep0_fd = -1;
 static int main_out_fd = -1;
 static int main_in_fd = -1;
 static int display_resource_fd = -1;
-static int gpio_resource_fd = -1;
+static int display_control_fd = -1;
+static int button_lines_fd = -1;
 static int packet_event_fd = -1;
 static bool functionfs_enabled = false;
 static volatile char tiny = 0;
@@ -116,7 +119,7 @@ static void receive_fd_bundle(uint8_t expected_kind, size_t expected_count,
   struct iovec iov = {.iov_base = packet, .iov_len = sizeof(packet)};
   union {
     struct cmsghdr alignment;
-    uint8_t bytes[CMSG_SPACE(5 * sizeof(int))];
+    uint8_t bytes[CMSG_SPACE(6 * sizeof(int))];
   } control;
   memset(&control, 0, sizeof(control));
   struct msghdr message = {
@@ -159,13 +162,14 @@ void workerReceiveSupervisorResources(void) {
   if (ep0_fd >= 0) {
     die_message("supervisor resources were received more than once");
   }
-  int prebind[5];
-  receive_fd_bundle(UGSP_PREBIND_RESOURCES, 5, prebind);
+  int prebind[6];
+  receive_fd_bundle(UGSP_PREBIND_RESOURCES, 6, prebind);
   ep0_fd = prebind[0];
   main_out_fd = prebind[1];
   main_in_fd = prebind[2];
   display_resource_fd = prebind[3];
-  gpio_resource_fd = prebind[4];
+  display_control_fd = prebind[4];
+  button_lines_fd = prebind[5];
 }
 
 int workerDisplayResourceFd(void) {
@@ -175,11 +179,18 @@ int workerDisplayResourceFd(void) {
   return display_resource_fd;
 }
 
-int workerGpioResourceFd(void) {
-  if (gpio_resource_fd < 0) {
-    die_message("GPIO resource requested before supervisor handoff");
+int workerDisplayControlFd(void) {
+  if (display_control_fd < 0) {
+    die_message("display-control lines requested before supervisor handoff");
   }
-  return gpio_resource_fd;
+  return display_control_fd;
+}
+
+int workerButtonLinesFd(void) {
+  if (button_lines_fd < 0) {
+    die_message("button lines requested before supervisor handoff");
+  }
+  return button_lines_fd;
 }
 
 static void send_control(uint8_t kind) {
@@ -440,11 +451,15 @@ void usbInit(void) {
 void waitAndProcessUSBRequests(uint32_t millis) {
   emulatorPoll();
 
-  struct pollfd fds[3] = {
+  struct pollfd fds[4] = {
       {.fd = control_fd, .events = POLLIN | POLLHUP | POLLERR},
       {.fd = ep0_fd, .events = POLLIN},
-      {.fd = packet_event_fd, .events = POLLIN}};
-  int ready = poll(fds, 3, (int)millis);
+      {.fd = packet_event_fd, .events = POLLIN},
+      {.fd = buttonEventFd(), .events = POLLIN | POLLPRI}};
+  int timeout = millis == 10 && !buttonAnyPressed()
+                    ? worker_display_retry_timeout_ms()
+                    : (int)millis;
+  int ready = poll(fds, 4, timeout);
   if (ready < 0 && errno != EINTR) {
     die_errno("poll FunctionFS endpoints");
   }
@@ -457,6 +472,9 @@ void waitAndProcessUSBRequests(uint32_t millis) {
 
   if (ready > 0 && (fds[2].revents & POLLIN) != 0) {
     process_out_packets();
+  }
+  if (ready > 0 && (fds[3].revents & (POLLIN | POLLPRI)) != 0) {
+    buttonDrainEvents();
   }
   flush_messages();
 }
