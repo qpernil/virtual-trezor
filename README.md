@@ -175,6 +175,7 @@ links neither upstream UDP nor SDL display/button implementations.
 ## Documentation
 
 - [Architecture and platform boundaries](docs/architecture.md)
+- [Future Trezor Safe 3 worker plan](docs/trezor-safe3-plan.md)
 - [Upstream baseline](docs/upstream-baseline.md)
 - [Raspberry Pi FunctionFS validation](docs/raspberry-pi-validation.md)
 - [I2C display and oscilloscope plan](docs/i2c-display-plan.md)
