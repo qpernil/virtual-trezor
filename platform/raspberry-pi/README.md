@@ -13,10 +13,7 @@ The current replacement surface is:
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; inherited FunctionFS endpoints, `ep0` events, and supervisor liveness |
 | `buttons_gpio.c` | `buttonRead`; logical No/Yes/center values and edge events through one inherited input-line handle |
-| `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; send the upstream framebuffer over inherited I2C or SPI descriptors |
-| `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
-| `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
-| `st7789.c` | ST7789 initialization, address-window encoding, and conversion of the legacy reverse-page framebuffer to centered 240x120 RGB565 pixels |
+| `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; pass the framebuffer and inherited descriptors through the `display-backends` C ABI |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
 
 `usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`.
@@ -65,9 +62,12 @@ healthy and no button is held. A timed wake is armed only while recovering a
 failed display transfer; an active button retains the firmware's normal 10 ms
 debounce/hold cadence.
 
-SH1106 initialization performs the vendor reset pulse. SPI mode selects command
-or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0 drive
-chip select. Center reports both logical Trezor buttons. Missing resources are
+The sibling `display-backends` library performs controller initialization,
+frame encoding, GPIO control, bus I/O, clearing, and display-off. It duplicates
+the already-open bus and exact GPIO-line descriptors passed through its C ABI;
+it never opens a hardware path. The worker retains backend selection, retry,
+timing, and logging policy. SH1106 SPI uses mode 0 at 4 MHz and lets SPI0 CE0
+drive chip select. Center reports both logical Trezor buttons. Missing resources are
 fatal; a transfer failure is logged without terminating USB service. The
 regular firmware `emulatorPoll` path retries after one second, reinitializes the
 display, and retransmits the current framebuffer even when the UI produces no

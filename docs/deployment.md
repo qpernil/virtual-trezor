@@ -10,12 +10,14 @@ disposable emulator state and test seeds. It also requires the selected I2C or
 SPI display bus and exact supervisor-owned GPIO line groups; it does not
 require a desktop session.
 
-The tested architecture has two separately installed projects:
+The tested architecture has three separately installed projects:
 
 - `usb-gadget-supervisor` owns ConfigFS, FunctionFS, the UDC, privilege drop,
   and cleanup as root;
 - `virtual-trezor-worker` runs the firmware integration and endpoint/UI logic
   as the unprivileged user named by the profile.
+- `display-backends` is linked into the worker and owns controller setup,
+  framebuffer conversion, and bus/GPIO operations.
 
 Only one gadget profile can own a UDC at a time. Stop Virtual YubiKey or any
 other gadget service before starting Virtual Trezor. Do not enable Raspberry
@@ -45,8 +47,11 @@ Install the normal C and package-config development dependencies. On
 Debian-family systems the base packages are:
 
 ```sh
-sudo apt install build-essential git pkg-config python3-dev libffi-dev
+sudo apt install build-essential git pkg-config python3-dev libffi-dev rustup
 sudo snap install astral-uv --classic
+rustup set profile minimal
+rustup toolchain install 1.85.0
+rustup default 1.85.0
 ```
 
 The build uses `uv tool run` with pinned `grpcio-tools==1.81.0`, which provides
@@ -62,6 +67,7 @@ upstream fixed-size byte arrays.
 Clone and initialize only the selected Trezor One dependencies:
 
 ```sh
+git clone https://github.com/qpernil/display-backends.git
 git clone https://github.com/qpernil/virtual-trezor.git
 cd virtual-trezor
 make init
@@ -230,25 +236,19 @@ pins differ:
 | Both/joystick press | 13 | 33 |
 
 The backend uses SPI mode 0 at 62.5 MHz. To test only the panel wiring and the
-actual backend, without firmware, FunctionFS, or the supervisor, stop any
-gadget worker and run:
+actual shared backend, without firmware, FunctionFS, or the supervisor, stop
+any gadget worker and run from the sibling `display-backends` checkout:
 
 ```sh
-make st7789-test
-sudo ./build/st7789-test
+cargo build --release --locked --features demo --bin display-backends-demo
+sudo ./target/release/display-backends-demo st7789-spi
 ```
 
-The test clears and initializes the panel, draws a centered border/cross/bar
-pattern, and waits for Enter before releasing its GPIO lines. This is a direct
-hardware test, so it normally requires root unless local SPI/GPIO permissions
-have been configured.
-
-Append the SPI path, GPIO path, and a frame count to measure full conversion
-and transfer throughput:
-
-```sh
-sudo ./build/st7789-test /dev/spidev0.0 /dev/gpiochip0 100
-```
+The demo initializes the panel through the same library used by the worker,
+renders and transfers 240 frames, reports the measured rate, and waits for
+Enter before clearing and releasing its GPIO lines. This is a direct hardware
+test, so it normally requires root unless local SPI/GPIO permissions have been
+configured. Optional SPI and GPIO-chip paths may follow the backend name.
 
 ## Optional second-Pi display and button bridge
 

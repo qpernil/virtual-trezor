@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 LEGACY_DIR="$UPSTREAM_DIR/legacy"
+DISPLAY_BACKENDS_DIR="${DISPLAY_BACKENDS_DIR:-$PROJECT_ROOT/../display-backends}"
 PROTOC_TOOL="grpcio-tools==1.81.0"
 PROTOC_WRAPPER="$PROJECT_ROOT/tools/protoc"
 
@@ -14,12 +15,17 @@ fi
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
 
-for tool in make pkg-config uv ar; do
+for tool in make pkg-config uv ar cargo; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required build tool: $tool" >&2
     exit 1
   fi
 done
+
+if [[ ! -f "$DISPLAY_BACKENDS_DIR/Cargo.toml" ]]; then
+  echo "Missing sibling display-backends checkout: $DISPLAY_BACKENDS_DIR" >&2
+  exit 1
+fi
 
 PROTOC_VERSION="$("$PROTOC_WRAPPER" --version)"
 if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
@@ -27,6 +33,7 @@ if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
   exit 1
 fi
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
+cargo build --release --locked --manifest-path "$DISPLAY_BACKENDS_DIR/Cargo.toml" --lib
 
 mkdir -p "$PROJECT_ROOT/build"
 export PATH="$PROJECT_ROOT/tools:$UPSTREAM_DIR/.venv/bin:$PATH"
@@ -37,6 +44,7 @@ if printf 'int main(void) { return 0; }\n' | \
 fi
 export EMULATOR=1
 export DEBUG_LINK=0
+export DISPLAY_BACKENDS_DIR
 
 make -C "$LEGACY_DIR/firmware/protob" clean
 make -C "$LEGACY_DIR/firmware" -f "$PROJECT_ROOT/mk/worker-firmware.mk" clean

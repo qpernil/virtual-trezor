@@ -29,7 +29,4 @@ PI_INITIAL_PLATFORM_TO_PROVIDE := \
 	platform/raspberry-pi/buttons_gpio.c \
 	platform/raspberry-pi/display_linux.c \
 	platform/raspberry-pi/worker_main.c \
-	platform/raspberry-pi/worker_config.c \
-	platform/raspberry-pi/sh1106_stream.c \
-	platform/raspberry-pi/ssd1306_stream.c \
-	platform/raspberry-pi/st7789.c
+	platform/raspberry-pi/worker_config.c

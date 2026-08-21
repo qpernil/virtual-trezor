@@ -19,9 +19,10 @@ The worker is designed to run under
 [`usb-gadget-supervisor`](https://github.com/qpernil/usb-gadget-supervisor).
 The supervisor owns ConfigFS, FunctionFS setup, UDC binding, privilege drop,
 and lifecycle control. This repository owns its Raspberry Pi integration,
-persistent simulated-flash adaptation, display and button backends, and
-unprivileged endpoint I/O. Upstream Trezor code remains owned and licensed by
-its respective copyright holders.
+persistent simulated-flash adaptation, display policy, button backend, and
+unprivileged endpoint I/O. Controller-specific mechanics are shared through
+[`display-backends`](https://github.com/qpernil/display-backends). Upstream
+Trezor code remains owned and licensed by its respective copyright holders.
 
 ## Quick start
 
@@ -31,12 +32,14 @@ submodules required by Trezor One:
 
 ```sh
 git clone https://github.com/qpernil/virtual-trezor.git
+git clone https://github.com/qpernil/display-backends.git
 cd virtual-trezor
 make init
 make check
 ```
 
-The FunctionFS worker must be built on Linux with a C toolchain and `uv`.
+Keep the repositories as sibling directories. The FunctionFS worker must be
+built on Linux with a C toolchain, Rust 1.85.0, and `uv`.
 The build obtains the matching protobuf compiler through pinned
 `grpcio-tools==1.81.0` package metadata:
 
