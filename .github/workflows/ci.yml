@@ -10,9 +10,32 @@ permissions:
 jobs:
   integration-boundary:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: virtual-trezor
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out Virtual Trezor
+        uses: actions/checkout@v7
+        with:
+          path: virtual-trezor
+
+      - name: Check out display backends HEAD
+        uses: actions/checkout@v7
+        with:
+          repository: qpernil/display-backends
+          path: display-backends
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@1.85.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.5"
+
       - name: Initialize pinned Trezor One dependencies
         run: make init
       - name: Verify upstream and platform boundary
         run: make check
+      - name: Build deployable Linux worker
+        run: make worker

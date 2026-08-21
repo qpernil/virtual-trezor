@@ -84,6 +84,9 @@ replacing the Raspberry Pi hardware boundary:
 - supply FunctionFS USB, the fixed-FD supervisor control channel, Linux
   display, and inherited GPIO-line button implementations from
   `platform/raspberry-pi`;
+- block the Linux worker in `poll` only until the deadline requested by the
+  upstream firmware, normally 10 ms, so idle CPU remains low without delaying
+  automatic lock, busy-screen expiry, or button processing;
 - send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
   address `0x3c`, a factory-configured SH1106 SPI HAT, or a 240x240 ST7789 SPI
   HAT;
