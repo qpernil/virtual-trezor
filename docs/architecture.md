@@ -101,8 +101,8 @@ upstream datagram implementation nor an SDL object is present in the worker.
    association descriptors and a WebUSB BOS capability matching the upstream
    legacy firmware. Device release `1.01` prevents the earlier descriptorless
    `1.00` enumeration result from suppressing Windows' Microsoft OS probe.
-   Fresh Windows enumeration remains to be validated; full Suite workflows and
-   the separate U2F HID interface remain.
+   Fresh Windows enumeration and automatic inbox WinUSB binding are validated;
+   full Suite workflows and the separate U2F HID interface remain.
 3. **Complete:** the genuine framebuffer is sent to a selectable SSD1306 or
    SH1106 I2C stream, with GPIO-backed buttons. Unit, full-worker, target
    electrical, second-Pi rendering, interactive-button, and 400 kHz

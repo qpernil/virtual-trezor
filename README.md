@@ -106,7 +106,8 @@ page. WinUSB supplies the Windows driver; WebUSB separately enables
 permissioned browser discovery and access. These profiles report device release
 `1.01`: release `1.00` predated the Microsoft OS descriptors, and Windows does
 not repeat a failed OS-descriptor probe for the same VID/PID/device-release
-tuple.
+tuple. Automatic binding to Microsoft's inbox WinUSB driver was validated on
+Windows with the `1.01` profile on 2026-08-22; no custom INF is required.
 
 A real Trezor One uses SPI for its OLED. The physical-HAT backend therefore preserves that
 transport style, while I2C remains an intentional Raspberry Pi adaptation for

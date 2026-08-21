@@ -80,7 +80,8 @@ driverless result under the VID/PID/device-release tuple and will not repeat a
 failed Microsoft OS descriptor probe. The WinUSB-capable profiles therefore
 report device release `1.01`, distinct from the earlier `1.00` descriptor set.
 Increment `bcd_device` again whenever Microsoft OS descriptors change in a way
-that requires Windows to enumerate them anew.
+that requires Windows to enumerate them anew. Automatic WinUSB binding without
+a custom INF was validated with release `1.01` on 2026-08-22.
 
 ## Known limitations
 
