@@ -7,7 +7,8 @@ Pi running either 64-bit Ubuntu or 64-bit Raspberry Pi OS; both are tested.
 Enabling DWC2 in peripheral mode provides the UDC used by the supervisor
 through ConfigFS and FunctionFS. The worker is experimental and must use only
 disposable emulator state and test seeds. It also requires the selected I2C or
-SPI display bus and a GPIO chip; it does not require a desktop session.
+SPI display bus and exact supervisor-owned GPIO line groups; it does not
+require a desktop session.
 
 The tested architecture has two separately installed projects:
 
@@ -109,11 +110,13 @@ The resulting choices are:
 | `virtual-trezor-st7789` | Direct 240x240 ST7789 LCD over SPI0 | `--display=st7789-spi` |
 
 The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
-`/dev/i2c-1`; both declare `/dev/gpiochip0`. The supervisor opens the
-selected resources before dropping privileges and passes inherited file
-descriptors to the worker, so no `i2c`, `spi`, or `gpio` group membership is
-required. The worker exits rather than silently running without its display or
-buttons if a required resource is missing.
+`/dev/i2c-1`. Both also declare one display-control output group and one button
+input/event group on `/dev/gpiochip0`. The supervisor opens the bus, claims the
+exact GPIO offsets, and passes the three resulting handles before dropping
+privileges. It does not pass the GPIO-chip descriptor, so the worker can neither
+select different offsets nor change line configuration. No `i2c`, `spi`, or
+`gpio` group membership is required. The worker exits rather than silently
+running without its display or buttons if a required resource is missing.
 
 The worker defaults to `sh1106-spi`. Override it in an alternate profile when
 needed; do not rely on I2C address probing, because both I2C controllers
@@ -126,12 +129,13 @@ arguments = ["--display=sh1106-i2c"]
 
 The available override values are `ssd1306-i2c`, `sh1106-i2c`,
 `sh1106-spi`, and `st7789-spi`.
-SH1106 backends request GPIO25 and pulse reset before sending the initialization
-sequence. SPI additionally drives GPIO24 Data/Command and uses SPI0 CE0 for
-chip select. Firmware No/Yes input uses active-low GPIO5 and GPIO26 with
-pull-ups. Active-low GPIO13 maps the physical HAT's joystick press to both
-logical buttons. GPIO5/GPIO26 can instead connect to the button outputs of the
-second-Pi virtual-display client.
+The SH1106 profiles place GPIO25 reset in the output handle, with SPI also
+placing GPIO24 Data/Command first. The worker pulses reset before initialization
+and SPI0 CE0 supplies chip select. The button handle contains active-low GPIO5,
+GPIO26, and GPIO13 with pull-ups and both-edge detection. The kernel converts
+them to logical pressed bits; GPIO13 maps the physical HAT's joystick press to
+both logical buttons. GPIO5/GPIO26 can instead connect to the button outputs of
+the second-Pi virtual-display client.
 
 The checked-in profiles use neutral placeholders. Before installing one, set
 `worker.command` to the built worker's absolute path and `worker.run_as` to its

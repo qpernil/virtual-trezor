@@ -24,14 +24,28 @@ state_directory = "/var/lib/virtual-trezor"
 runtime_directory = "/run/virtual-trezor"
 
 [[resources]]
+type = "character-device"
 name = "display-i2c"
 path = "/dev/i2c-1"
 access = "read-write"
 
 [[resources]]
-name = "display-gpio"
+type = "gpio-lines"
+name = "display-control"
 path = "/dev/gpiochip0"
-access = "read-write"
+offsets = [25] # reset
+direction = "output"
+initial_values = [false]
+
+[[resources]]
+type = "gpio-lines"
+name = "buttons"
+path = "/dev/gpiochip0"
+offsets = [5, 26, 13] # left/No, right/Yes, center/both
+direction = "input"
+active_low = true
+bias = "pull-up"
+edge = "both"
 
 [[functions]]
 type = "functionfs"

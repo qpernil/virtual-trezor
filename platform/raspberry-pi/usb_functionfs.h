@@ -5,6 +5,7 @@
 
 void workerReceiveSupervisorResources(void);
 int workerDisplayResourceFd(void);
-int workerGpioResourceFd(void);
+int workerDisplayControlFd(void);
+int workerButtonLinesFd(void);
 
 #endif

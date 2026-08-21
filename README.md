@@ -79,7 +79,7 @@ replacing the Raspberry Pi hardware boundary:
   the generic OLED framebuffer, file-backed flash, timer, and randomness;
 - exclude both UDP source files and the upstream SDL display/button objects;
 - supply FunctionFS USB, the fixed-FD supervisor control channel, Linux
-  display, and active-low GPIO button implementations from
+  display, and inherited GPIO-line button implementations from
   `platform/raspberry-pi`;
 - send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
   address `0x3c`, a factory-configured SH1106 SPI HAT, or a 240x240 ST7789 SPI
@@ -98,9 +98,11 @@ transport style, while I2C remains an intentional Raspberry Pi adaptation for
 the virtual display and future I2C-native modules. Both retain the genuine
 upstream framebuffer and UI composition.
 
-The default checked-in profile declares `/dev/spidev0.0` and
-`/dev/gpiochip0`; the explicitly named I2C profile instead declares
-`/dev/i2c-1` and `/dev/gpiochip0`. With no argument the worker selects SH1106
+The default checked-in profile declares `/dev/spidev0.0`, an exact
+display-control GPIO output group, and an exact button GPIO input/event group;
+the explicitly named I2C profile substitutes `/dev/i2c-1` for the display bus.
+The supervisor claims both GPIO groups and passes only their line-request
+handles, never the GPIO-chip handle. With no argument the worker selects SH1106
 SPI. The
 `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides it.
 SH1106 modes pulse GPIO25 reset; SPI additionally drives GPIO24 Data/Command.

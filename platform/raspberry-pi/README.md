@@ -12,7 +12,7 @@ The current replacement surface is:
 | Replacement | Responsibility |
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; inherited FunctionFS endpoints, `ep0` events, and supervisor liveness |
-| `buttons_gpio.c` | `buttonRead`; active-low GPIO5/GPIO26 inputs for No/Yes and GPIO13 center mapped to both |
+| `buttons_gpio.c` | `buttonRead`; logical No/Yes/center values and edge events through one inherited input-line handle |
 | `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; send the upstream framebuffer over inherited I2C or SPI descriptors |
 | `ssd1306_stream.c` | Pure construction of SSD1306 initialization, address-window, and 1,025-byte framebuffer messages |
 | `sh1106_stream.c` | Pure construction of SH1106 initialization and page-addressed framebuffer messages |
@@ -52,24 +52,35 @@ device-specific transactions after privilege drop. The SPI profile places
 the two I2C controllers cannot be distinguished by probing because both
 normally use `0x3c`.
 
-The required `display-gpio` resource places `/dev/gpiochip0` in the next
-pre-bind slot. SH1106 initialization requests GPIO25 and performs the vendor
-reset pulse. SPI mode also requests GPIO24 to select
-command or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0
-drive chip select. The button backend requests GPIO5, GPIO26, and GPIO13 as
-pull-up inputs from the same GPIO chip. GPIO13 is the HAT joystick press and
-reports both logical Trezor buttons. Missing resources are fatal; a transfer failure
-is logged without terminating USB service. The regular firmware `emulatorPoll`
-path retries after one second, reinitializes the display, and retransmits the
-current framebuffer even when the UI produces no later refresh.
+The supervisor claims two exact GPIO v2 line groups. The next pre-bind slot is
+one display-control output handle, ordered as Data/Command then reset for
+SH1106. The ST7789 profile adds backlight as its third line. The following slot
+is one input/event handle ordered as No, Yes, then center. Its profile configures
+active-low interpretation, pull-ups, and both-edge events, so the worker knows
+neither GPIO-chip paths nor numeric offsets. It writes display-control bits,
+reads logical button bits atomically, and blocks on button events while idle.
+GPIO line ownership and electrical configuration remain in the supervisor.
+The normal firmware loop uses an infinite blocking wait when the display is
+healthy and no button is held. A timed wake is armed only while recovering a
+failed display transfer; an active button retains the firmware's normal 10 ms
+debounce/hold cadence.
+
+SH1106 initialization performs the vendor reset pulse. SPI mode selects command
+or framebuffer data, configures SPI mode 0 at 4 MHz, and lets SPI0 CE0 drive
+chip select. Center reports both logical Trezor buttons. Missing resources are
+fatal; a transfer failure is logged without terminating USB service. The
+regular firmware `emulatorPoll` path retries after one second, reinitializes the
+display, and retransmits the current framebuffer even when the UI produces no
+later refresh.
 
 On an orderly exit the worker blanks display RAM and turns the panel output
 off. This covers service stops and requested USB reincarnations. `SIGKILL`
 cannot run process cleanup; the replacement worker clears the panel again as
 part of display initialization.
 
-The ST7789 backend requests GPIO25 Data/Command, GPIO27 reset, and GPIO24
-backlight, then uses SPI mode 0 at 62.5 MHz. It clears the native 240x240 panel
+The ST7789 profile assigns GPIO25 Data/Command, GPIO27 reset, and GPIO24
+backlight to its inherited output handle. The backend uses SPI mode 0 at 62.5
+MHz. It clears the native 240x240 panel
 once and updates only a centered 240x120 RGB565 window. Trezor's own renderer
 still composes the original 128x64 1-bit framebuffer.
 

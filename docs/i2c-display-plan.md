@@ -65,8 +65,8 @@ The worker options `--display=ssd1306-i2c|sh1106-i2c` select the I2C stream.
 Explicit selection is required because both controllers normally acknowledge
 address `0x3c` and provide no useful identification query. The checked-in I2C
 profile selects SH1106 for the validated second-Pi setup; change it to SSD1306
-for that controller family. SH1106 reset is GPIO25, requested through the
-required supervisor-opened `/dev/gpiochip0` resource. The factory-configured
+for that controller family. SH1106 reset is GPIO25, supplied through the exact
+display-control line handle claimed by the supervisor. The factory-configured
 Waveshare HAT uses the default `sh1106-spi` backend and profile.
 
 The upstream framebuffer has the ordering used by the original OLED setup.
@@ -86,10 +86,11 @@ belongs in upstream `legacy/oled.c`.
    the remote viewer can hold those lines low from mouse input.
 6. **Pending:** attach and validate an I2C-native physical 128x64 OLED.
 
-`usb-gadget-supervisor` opens the required `display-i2c` and `display-gpio`
-resources and appends their descriptors to the fixed pre-bind bundle. Pure C
-tests verify both exact command streams, page/address construction, I2C/SPI
-option parsing, and byte-for-byte framebuffer payloads.
+`usb-gadget-supervisor` opens the required `display-i2c` bus, claims the exact
+display-control and button GPIO groups, and appends those three handles to the
+fixed pre-bind bundle. Pure C tests verify both exact command streams,
+page/address construction, I2C/SPI option parsing, and byte-for-byte
+framebuffer payloads.
 
 ## Wired validation
 
