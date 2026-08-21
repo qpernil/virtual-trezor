@@ -97,8 +97,10 @@ upstream datagram implementation nor an SDL object is present in the worker.
    baseline.
 2. **In progress:** build the Pi worker with FunctionFS USB. Real
    USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
-   interactive confirmation are proven. Full Suite workflows and the separate
-   U2F HID interface remain.
+   interactive confirmation are proven. The profile now publishes WinUSB
+   association descriptors and a WebUSB BOS capability matching the upstream
+   legacy firmware. Fresh Windows enumeration remains to be validated; full
+   Suite workflows and the separate U2F HID interface remain.
 3. **Complete:** the genuine framebuffer is sent to a selectable SSD1306 or
    SH1106 I2C stream, with GPIO-backed buttons. Unit, full-worker, target
    electrical, second-Pi rendering, interactive-button, and 400 kHz

@@ -72,6 +72,13 @@ configured automatic-lock interval. Confirm that the worker remains at low
 idle CPU and that the firmware enters its lock/screensaver state without an
 external event. This guards the legacy emulator's bounded 10 ms wait contract.
 
+On a fresh Windows device instance, confirm that interface zero binds to
+Microsoft's inbox WinUSB driver without installing an INF. Then inspect the BOS
+descriptor and confirm the WebUSB 1.0 platform capability uses vendor request
+code `0x01` and advertises no landing page. Windows may cache an earlier
+driverless instance; remove that instance in Device Manager before repeating
+enumeration after a descriptor change.
+
 ## Known limitations
 
 - Only the main vendor interface is exposed; the separate U2F HID interface is
