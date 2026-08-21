@@ -332,6 +332,12 @@ this is an intentional safety boundary, not a transport failure. Use testnet
 or regtest with development tooling for signing-flow experiments, and never
 place a valuable seed in the worker.
 
+Leave the device on its home screen without host traffic for the configured
+automatic-lock interval. The worker should remain at low idle CPU while the
+firmware still enters its lock/screensaver state on schedule. USB, GPIO, and
+supervisor events wake the worker early; otherwise its main loop returns at the
+upstream emulator's normal 10 ms deadline.
+
 Use the HAT joystick on GPIO5/GPIO26/GPIO13 or the remote virtual-display
 client for No/Yes/both input. Stop the service before selecting another
 profile:

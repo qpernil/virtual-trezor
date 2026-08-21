@@ -28,6 +28,7 @@
 #include "messages.h"
 #include "buttons_gpio.h"
 #include "display_linux.h"
+#include "poll_timeout.h"
 #include "usb.h"
 #include "usb_functionfs.h"
 
@@ -456,9 +457,8 @@ void waitAndProcessUSBRequests(uint32_t millis) {
       {.fd = ep0_fd, .events = POLLIN},
       {.fd = packet_event_fd, .events = POLLIN},
       {.fd = buttonEventFd(), .events = POLLIN | POLLPRI}};
-  int timeout = millis == 10 && !buttonAnyPressed()
-                    ? worker_display_retry_timeout_ms()
-                    : (int)millis;
+  int timeout =
+      worker_poll_timeout_ms(millis, worker_display_retry_timeout_ms());
   int ready = poll(fds, 4, timeout);
   if (ready < 0 && errno != EINTR) {
     die_errno("poll FunctionFS endpoints");

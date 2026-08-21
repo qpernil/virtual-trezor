@@ -64,11 +64,6 @@ int buttonEventFd(void) {
   return button_lines_fd;
 }
 
-bool buttonAnyPressed(void) {
-  initialize_gpio_buttons();
-  return cached_gpio_pressed != 0;
-}
-
 void buttonDrainEvents(void) {
   initialize_gpio_buttons();
   struct gpio_v2_line_event event;

@@ -67,6 +67,11 @@ Fault-inject a display disconnect. USB must remain operational, and the regular
 firmware polling path must reinitialize and retransmit the current framebuffer
 after the resource returns.
 
+With no host traffic or button input, leave the home screen idle for the
+configured automatic-lock interval. Confirm that the worker remains at low
+idle CPU and that the firmware enters its lock/screensaver state without an
+external event. This guards the legacy emulator's bounded 10 ms wait contract.
+
 ## Known limitations
 
 - Only the main vendor interface is exposed; the separate U2F HID interface is

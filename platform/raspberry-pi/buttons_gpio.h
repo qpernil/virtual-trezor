@@ -6,7 +6,6 @@
 #include <stdbool.h>
 
 int buttonEventFd(void);
-bool buttonAnyPressed(void);
 void buttonDrainEvents(void);
 
 #endif

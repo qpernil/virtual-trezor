@@ -65,10 +65,11 @@ On the physical HAT, center maps to both logical Trezor buttons. The original
 two lines may instead be driven by the remote virtual-display process, whose
 middle click activates both.
 
-The platform wait blocks indefinitely on USB, lifecycle, packet, and button
-descriptors while the display is healthy and no button is held. A display
-failure arms only the retry deadline, while an active button keeps the
-firmware's 10 ms debounce/hold cadence. There is no idle GPIO sampling loop.
+The platform wait polls USB, lifecycle, packet, and button descriptors for no
+longer than the timeout requested by the upstream firmware. Events and a due
+display-recovery deadline may wake it earlier. Preserving the firmware's 10 ms
+main-loop cadence keeps automatic lock, busy-screen expiry, and button state
+processing faithful to the legacy emulator contract.
 
 USB has two emulator-specific layers that must both be excluded:
 

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "button_gpio_state.h"
+#include "poll_timeout.h"
 #include "worker_config.h"
 
 int main(void) {
@@ -14,6 +15,11 @@ int main(void) {
          BUTTON_GPIO_YES_PRESSED);
   assert(button_gpio_pressed(BUTTON_GPIO_CENTER_LINE) ==
          (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
+
+  assert(worker_poll_timeout_ms(10, -1) == 10);
+  assert(worker_poll_timeout_ms(10, 0) == 0);
+  assert(worker_poll_timeout_ms(10, 1000) == 10);
+  assert(worker_poll_timeout_ms(UINT32_MAX, -1) == INT_MAX);
 
   char error[160];
   char *default_arguments[] = {"virtual-trezor-worker"};

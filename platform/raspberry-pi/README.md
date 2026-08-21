@@ -55,12 +55,11 @@ SH1106. The ST7789 profile adds backlight as its third line. The following slot
 is one input/event handle ordered as No, Yes, then center. Its profile configures
 active-low interpretation, pull-ups, and both-edge events, so the worker knows
 neither GPIO-chip paths nor numeric offsets. It writes display-control bits,
-reads logical button bits atomically, and blocks on button events while idle.
-GPIO line ownership and electrical configuration remain in the supervisor.
-The normal firmware loop uses an infinite blocking wait when the display is
-healthy and no button is held. A timed wake is armed only while recovering a
-failed display transfer; an active button retains the firmware's normal 10 ms
-debounce/hold cadence.
+reads logical button bits atomically, and wakes early on button events. GPIO
+line ownership and electrical configuration remain in the supervisor. The
+normal firmware loop retains the timeout requested by upstream—normally 10 ms—
+so automatic lock, busy-screen expiry, and button processing continue even
+while USB is idle. A due display-recovery deadline may shorten that wait.
 
 The sibling `display-backends` library performs controller initialization,
 native frame transfer, optional frame conversion, GPIO control, bus I/O,
