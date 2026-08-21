@@ -34,8 +34,9 @@ display refresh:
 The Pi worker excludes `legacy/emulator/oled.c`. Project-owned `oledInit` and
 `oledRefresh` implementations pass the existing framebuffer and inherited
 bus/GPIO descriptors through the C ABI of the sibling `display-backends`
-library. The library owns controller initialization, signaling, bus writes,
-frame conversion, clearing, and display-off. The Trezor adapter retains
+library. The library's native layer owns controller initialization, signaling,
+native page/RGB565 writes, clearing, and display-off. Its optional conversion
+layer maps the producer format into that native frame. The Trezor adapter retains
 selection, retry, timing, and logging policy. `emulatorPoll` remains a platform ABI symbol because the
 upstream firmware loop calls it in emulator builds. In this implementation it
 retries a failed display transfer after one second, reinitializing the
@@ -47,6 +48,12 @@ four-wire SPI backend, which is the worker default.
 The optional ST7789 backend converts the same completed 1-bit framebuffer to
 RGB565 and scales it to a centered 240x120 window on the 240x240 panel. It does
 not replace Trezor's own layout, font, bitmap, or drawing routines.
+The shared handle declares this producer as the neutral
+`Mono1MsbReversePage` format with width 128, height 64, and stride 128. The
+library also accepts row-major `Mono8` and RGB565 producers, independently of
+controller selection, for workers with future framebuffer formats. A producer
+already composing the controller's native 1-bit or RGB565 frame can bypass
+conversion entirely.
 
 Buttons have the same useful split. `legacy/buttons.c` continues to own
 `buttonUpdate` and the real debounce/state transitions. The Pi port supplies

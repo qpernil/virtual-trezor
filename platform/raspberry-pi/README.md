@@ -63,7 +63,8 @@ failed display transfer; an active button retains the firmware's normal 10 ms
 debounce/hold cadence.
 
 The sibling `display-backends` library performs controller initialization,
-frame encoding, GPIO control, bus I/O, clearing, and display-off. It duplicates
+native frame transfer, optional frame conversion, GPIO control, bus I/O,
+clearing, and display-off. It duplicates
 the already-open bus and exact GPIO-line descriptors passed through its C ABI;
 it never opens a hardware path. The worker retains backend selection, retry,
 timing, and logging policy. SH1106 SPI uses mode 0 at 4 MHz and lets SPI0 CE0
@@ -72,6 +73,13 @@ fatal; a transfer failure is logged without terminating USB service. The
 regular firmware `emulatorPoll` path retries after one second, reinitializes the
 display, and retransmits the current framebuffer even when the UI produces no
 later refresh.
+
+The adapter declares the current firmware framebuffer as
+`Mono1MsbReversePage`, 128x64 with a 128-byte page stride. Pixel format is
+separate from controller selection: the shared library also supports row-major
+`Mono8` and RGB565 input through SSD1306, SH1106, and ST7789 backends. Producers
+that already compose a controller-native frame may use the native write layer
+without conversion.
 
 On an orderly exit the worker blanks display RAM and turns the panel output
 off. This covers service stops and requested USB reincarnations. `SIGKILL`
