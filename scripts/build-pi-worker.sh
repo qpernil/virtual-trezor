@@ -68,6 +68,11 @@ make -C "$LEGACY_DIR/firmware" \
 
 ARTIFACT="$LEGACY_DIR/firmware/virtual-trezor-worker.elf"
 test -x "$ARTIFACT"
-install -m 0755 "$ARTIFACT" "$PROJECT_ROOT/build/virtual-trezor-worker"
-file "$PROJECT_ROOT/build/virtual-trezor-worker"
-sha256sum "$PROJECT_ROOT/build/virtual-trezor-worker"
+WORKER_PATH="$PROJECT_ROOT/build/virtual-trezor-worker"
+WORKER_STAGING="$(mktemp "$PROJECT_ROOT/build/.virtual-trezor-worker.XXXXXX")"
+trap 'rm -f "$WORKER_STAGING"' EXIT
+install -m 0755 "$ARTIFACT" "$WORKER_STAGING"
+mv -f "$WORKER_STAGING" "$WORKER_PATH"
+trap - EXIT
+file "$WORKER_PATH"
+sha256sum "$WORKER_PATH"
