@@ -5,7 +5,9 @@ name = "virtual-trezor-st7789"
 vendor_id = 0x1209
 product_id = 0x53c1
 bcd_usb = 0x0210
-bcd_device = 0x0100
+# 1.01 distinguishes the WinUSB-capable descriptor set from the earlier 1.00
+# device, for which Windows may have cached the absence of Microsoft OS data.
+bcd_device = 0x0101
 max_speed = "full-speed"
 device_class = 0
 device_subclass = 0

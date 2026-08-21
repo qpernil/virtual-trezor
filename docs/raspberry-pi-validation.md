@@ -76,8 +76,11 @@ On a fresh Windows device instance, confirm that interface zero binds to
 Microsoft's inbox WinUSB driver without installing an INF. Then inspect the BOS
 descriptor and confirm the WebUSB 1.0 platform capability uses vendor request
 code `0x01` and advertises no landing page. Windows may cache an earlier
-driverless instance; remove that instance in Device Manager before repeating
-enumeration after a descriptor change.
+driverless result under the VID/PID/device-release tuple and will not repeat a
+failed Microsoft OS descriptor probe. The WinUSB-capable profiles therefore
+report device release `1.01`, distinct from the earlier `1.00` descriptor set.
+Increment `bcd_device` again whenever Microsoft OS descriptors change in a way
+that requires Windows to enumerate them anew.
 
 ## Known limitations
 
