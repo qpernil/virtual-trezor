@@ -5,11 +5,10 @@
 `usb-gadget-supervisor` opens declared I2C/SPI devices, claims exact GPIO line
 groups, drops privileges, and launches this worker. The worker then publishes
 the USB personality obtained from the genuine firmware. The supervisor
-validates it, creates ConfigFS and FunctionFS, and retains every raw FunctionFS
-file. The worker receives nonblocking packet-proxy sockets for both interfaces'
-OUT and IN endpoints. `ep0` lifecycle and setup requests arrive as typed
-control-channel records. The worker opens no USB path. The supervisor preserves
-packet boundaries but does not interpret Trezor messages or secret material.
+validates it, creates ConfigFS and FunctionFS, retains `ep0`, and passes the
+four actual data-endpoint files to the worker. `ep0` lifecycle and setup
+requests arrive as typed control-channel records. The worker opens no USB path.
+The supervisor is absent from the Trezor packet path.
 
 A Pi currently provides one usable USB device controller. The supervisor can
 therefore select a Virtual Trezor or Virtual YubiKey profile, but it cannot
@@ -66,8 +65,8 @@ On the physical HAT, center maps to both logical Trezor buttons. The original
 two lines may instead be driven by the remote virtual-display process, whose
 middle click activates both.
 
-The platform wait polls the supervisor control socket, endpoint proxies, and
-button descriptors for no
+The platform wait polls the supervisor control socket, worker-local endpoint
+queues, and button descriptors for no
 longer than the timeout requested by the upstream firmware. Events and a due
 display-recovery deadline may wake it earlier. Preserving the firmware's 10 ms
 main-loop cadence keeps automatic lock, busy-screen expiry, and button state
@@ -85,13 +84,24 @@ controller. The genuine firmware still initializes its USB stack, handles
 setup packets, configures endpoints, and processes packet callbacks as it would
 on hardware. A shared Rust discovery parser directly drives that controller
 through one control-transfer callback and returns the typed CBOR personality
-expected by the supervisor. At runtime supervisor control records and packet
-proxies drive the same virtual controller. Emulator flash, timer, and randomness
-remain in place; the UDP abstraction and desktop SDL do not.
+expected by the supervisor. At runtime supervisor control records and direct
+FunctionFS data handles drive the same virtual controller. Emulator flash,
+timer, and randomness remain in place; the UDP abstraction and desktop SDL do
+not.
+
+One worker-owned reader thread serves each blocking FunctionFS OUT endpoint.
+It publishes one completed transfer through a single shared handoff slot and
+wakes the firmware loop with `eventfd`; it never calls firmware code. A second
+completion before the firmware consumes the first is rejected as an invariant
+failure instead of being buffered by the USB adapter. FunctionFS IN endpoints
+have no helper: firmware writes them directly and blocks in the kernel until
+the host accepts the transfer. There is no socket, queue, header,
+acknowledgement, or additional USB framing. Higher-level Trezor message
+assembly remains entirely in the genuine firmware.
 
 The supervisor control socket carries named hardware resources once, complete
 USB configurations from worker to supervisor, quiesce/serving lifecycle
-records, and replacement endpoint proxies. `usbReconnect()` republishes the
+records, and replacement FunctionFS endpoint files. `usbReconnect()` republishes the
 firmware personality and causes a real UDC unbind/rebind while the firmware
 process survives. Invalid replacement CBOR is rejected before the active USB
 generation is disturbed.
@@ -99,10 +109,12 @@ generation is disturbed.
 Host sleep is a normal firmware lifecycle, not a process restart. A
 `SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.
 On suspend the worker first invokes the firmware callback, synchronously
-checkpoints the mapped emulator flash image, and turns the display off. Resume,
-or a reset-style wake followed by enable, reinitializes the display and
-retransmits the current framebuffer, providing a visible indication of host
-sleep without restarting the firmware. The focused
+checkpoints the mapped emulator flash image, turns the display off, and parks
+inside the pollable supervisor control channel. The Raspberry Pi platform timer
+does not advance while parked, so the firmware's auto-lock and busy-screen
+deadlines do not consume suspended time. Resume, or a reset-style wake followed
+by enable, restarts virtual time, reinitializes the display, and retransmits the
+current framebuffer without restarting the firmware. The focused
 flash checkpoint avoids stalling on unrelated filesystems; it is an
 opportunistic safeguard rather than a guarantee that power will remain long
 enough to complete it.

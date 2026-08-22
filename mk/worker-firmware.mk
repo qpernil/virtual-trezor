@@ -17,8 +17,8 @@ SDL_CFLAGS := $(shell pkg-config --cflags sdl2 SDL2_image 2>/dev/null)
 SDL_LDLIBS := $(shell pkg-config --libs sdl2 SDL2_image 2>/dev/null)
 CFLAGS := $(filter-out $(SDL_CFLAGS),$(CFLAGS))
 LDLIBS := $(filter-out $(SDL_LDLIBS),$(LDLIBS))
-CFLAGS += -I$(DISPLAY_BACKENDS_DIR)/include
-LDLIBS += $(DISPLAY_BACKENDS_LIB) $(USB_GADGET_WORKER_LIB) -ldl -lm
+CFLAGS += -I$(DISPLAY_BACKENDS_DIR)/include -pthread
+LDLIBS += $(DISPLAY_BACKENDS_LIB) $(USB_GADGET_WORKER_LIB) -pthread -ldl -lm
 OBJS += platform_buttons.o platform_display.o platform_main.o \
 	platform_worker_config.o firmware_usb.o libopencm3_usb.o \
 	libopencm3_usb_control.o

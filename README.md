@@ -81,7 +81,7 @@ replacing the Raspberry Pi hardware boundary:
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
   the generic OLED framebuffer, file-backed flash, timer, and randomness;
 - exclude both UDP source files and the upstream SDL display/button objects;
-- supply a virtual `libopencm3` USB controller, nonblocking endpoint proxies,
+- supply a virtual `libopencm3` USB controller, direct FunctionFS endpoints,
   the supervisor control channel, Linux display, and inherited GPIO-line button
   implementations from
   `platform/raspberry-pi`;

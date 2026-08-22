@@ -6,24 +6,28 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
-#include <time.h>
 #include <unistd.h>
 
 #include <libopencm3/usb/usbd.h>
 
 #include <usb_personality_ffi.h>
+#include <usb_worker_protocol.h>
 
 #include "buttons_gpio.h"
 #include "display_linux.h"
 #include "memory.h"
 #include "poll_timeout.h"
+#include "timer.h"
+#include "timer_linux.h"
 #include "usb.h"
 #include "usb_functionfs.h"
 #include "usb_private.h"
@@ -61,11 +65,19 @@ struct worker_record {
 };
 
 struct virtual_endpoint {
-  int fd;
+  int functionfs_fd;
+  int event_fd;
+  pthread_t thread;
+  bool thread_running;
   uint8_t address;
   uint8_t type;
   uint16_t max_packet_size;
   bool stalled;
+  pthread_mutex_t transfer_mutex;
+  uint8_t *transfer_data;
+  uint8_t *read_data;
+  uint16_t transfer_length;
+  bool transfer_occupied;
 };
 
 static int control_fd = CONTROL_FD;
@@ -75,7 +87,9 @@ static int button_lines_fd = -1;
 static uint32_t generation = 0;
 static uint32_t next_configuration_request = 1;
 static bool usb_enabled = false;
+static uint64_t endpoint_activation = 0;
 static bool controller_already_serviced = false;
+static bool endpoints_initialized = false;
 static struct virtual_endpoint endpoints[MAX_ENDPOINT_NUMBER + 1][2];
 static usbd_device virtual_device;
 
@@ -222,8 +236,8 @@ static void send_record(uint8_t kind, uint32_t record_generation,
   if (body_length != 0) {
     memcpy(packet + PROTOCOL_HEADER_LENGTH, body, body_length);
   }
-  ssize_t length = send(control_fd, packet, PROTOCOL_HEADER_LENGTH + body_length,
-                        MSG_NOSIGNAL);
+  ssize_t length = send(control_fd, packet,
+                        PROTOCOL_HEADER_LENGTH + body_length, MSG_NOSIGNAL);
   free(packet);
   if (length != (ssize_t)(PROTOCOL_HEADER_LENGTH + body_length)) {
     die_errno("send worker record");
@@ -300,9 +314,18 @@ static struct virtual_endpoint *endpoint_for(uint8_t address) {
 static usbd_device *virtual_init(void) {
   memset(&virtual_device, 0, sizeof(virtual_device));
   for (size_t number = 0; number <= MAX_ENDPOINT_NUMBER; number++) {
-    endpoints[number][0].fd = -1;
-    endpoints[number][1].fd = -1;
+    for (size_t direction = 0; direction < 2; direction++) {
+      struct virtual_endpoint *endpoint = &endpoints[number][direction];
+      endpoint->functionfs_fd = -1;
+      endpoint->event_fd = -1;
+      if (!endpoints_initialized) {
+        if (pthread_mutex_init(&endpoint->transfer_mutex, NULL) != 0) {
+          die_message("initialize endpoint transfer slot");
+        }
+      }
+    }
   }
+  endpoints_initialized = true;
   return &virtual_device;
 }
 
@@ -372,6 +395,8 @@ static void virtual_ep_nak_set(usbd_device *device, uint8_t address,
   (void)nak;
 }
 
+static bool functionfs_generation_ended(void);
+
 static uint16_t virtual_ep_write_packet(usbd_device *device, uint8_t address,
                                         const void *data, uint16_t length) {
   (void)device;
@@ -387,31 +412,26 @@ static uint16_t virtual_ep_write_packet(usbd_device *device, uint8_t address,
     return length;
   }
   struct virtual_endpoint *endpoint = endpoint_for(address | 0x80);
-  if (!usb_enabled || endpoint == NULL || endpoint->fd < 0 ||
+  if (!usb_enabled || endpoint == NULL || endpoint->functionfs_fd < 0 ||
       endpoint->stalled) {
     return length;
   }
-  uint8_t encoded_length[2];
-  put_be16(encoded_length, length);
-  struct iovec vectors[2] = {
-      {.iov_base = encoded_length, .iov_len = sizeof(encoded_length)},
-      {.iov_base = (void *)data, .iov_len = length},
-  };
-  struct msghdr message = {.msg_iov = vectors, .msg_iovlen = 2};
-  ssize_t queued = sendmsg(endpoint->fd, &message, MSG_DONTWAIT | MSG_NOSIGNAL);
-  if (queued == (ssize_t)(sizeof(encoded_length) + length)) {
+  if (length > endpoint->max_packet_size) {
+    die_message("firmware produced an oversized IN transfer");
+  }
+  const void *transfer = length == 0 ? (const void *)"" : data;
+  ssize_t written;
+  do {
+    written = write(endpoint->functionfs_fd, transfer, length);
+  } while (written < 0 && errno == EINTR);
+  if (written == length) {
     return length;
   }
-  if (queued < 0 && (errno == EINTR || errno == EAGAIN ||
-                     errno == EWOULDBLOCK)) {
-    return 0;
-  }
-  if (queued < 0 && (errno == ENODEV || errno == EPIPE ||
-                     errno == ESHUTDOWN)) {
+  if (written < 0 && functionfs_generation_ended()) {
     usb_enabled = false;
     return length;
   }
-  die_message("short or failed virtual endpoint IN transfer");
+  die_message("short or failed direct FunctionFS IN transfer");
   return 0;
 }
 
@@ -428,31 +448,34 @@ static uint16_t virtual_ep_read_packet(usbd_device *device, uint8_t address,
     return (uint16_t)copied;
   }
   struct virtual_endpoint *endpoint = endpoint_for(address & 0x7f);
-  if (!usb_enabled || endpoint == NULL || endpoint->fd < 0 ||
+  if (!usb_enabled || endpoint == NULL || endpoint->transfer_data == NULL ||
       endpoint->stalled) {
     return 0;
   }
-  uint8_t encoded_length[2];
-  struct iovec vectors[2] = {
-      {.iov_base = encoded_length, .iov_len = sizeof(encoded_length)},
-      {.iov_base = data, .iov_len = length},
-  };
-  struct msghdr message = {.msg_iov = vectors, .msg_iovlen = 2};
-  ssize_t received = recvmsg(endpoint->fd, &message, MSG_DONTWAIT | MSG_TRUNC);
-  if (received >= 0) {
-    if (received < (ssize_t)sizeof(encoded_length) ||
-        (size_t)received != sizeof(encoded_length) + be16(encoded_length) ||
-        be16(encoded_length) > length) {
-      die_message("invalid virtual endpoint OUT packet");
-    }
-    return be16(encoded_length);
+  int result = pthread_mutex_lock(&endpoint->transfer_mutex);
+  if (result != 0) {
+    errno = result;
+    die_errno("lock OUT endpoint transfer slot");
   }
-  if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ||
-      errno == ENODEV || errno == EPIPE || errno == ESHUTDOWN) {
+  if (!endpoint->transfer_occupied) {
+    pthread_mutex_unlock(&endpoint->transfer_mutex);
     return 0;
   }
-  die_errno("receive virtual endpoint OUT packet");
-  return 0;
+  uint16_t packet_length = endpoint->transfer_length;
+  if (packet_length > length) {
+    pthread_mutex_unlock(&endpoint->transfer_mutex);
+    die_message("firmware supplied a short OUT packet buffer");
+  }
+  if (packet_length != 0) {
+    memcpy(data, endpoint->transfer_data, packet_length);
+  }
+  endpoint->transfer_occupied = false;
+  int unlock_result = pthread_mutex_unlock(&endpoint->transfer_mutex);
+  if (unlock_result != 0) {
+    errno = unlock_result;
+    die_errno("consume firmware OUT transfer slot");
+  }
+  return packet_length;
 }
 
 static void service_virtual_usb(int timeout_ms);
@@ -509,36 +532,34 @@ static void run_control_transfer(const uint8_t setup_bytes[8],
   control_in_length = 0;
   virtual_device.control_state.req = setup;
   virtual_device.user_callback_ctr[0][USB_TRANSACTION_SETUP](&virtual_device,
-                                                              0);
+                                                             0);
   if (!control_stalled && (setup.bmRequestType & 0x80) == 0 &&
       setup.wLength != 0) {
     while (!control_stalled &&
            (virtual_device.control_state.state == DATA_OUT ||
             virtual_device.control_state.state == LAST_DATA_OUT)) {
       virtual_device.user_callback_ctr[0][USB_TRANSACTION_OUT](&virtual_device,
-                                                                0);
+                                                               0);
     }
   }
   if (!control_stalled && (setup.bmRequestType & 0x80) != 0) {
     while (virtual_device.control_state.state == DATA_IN) {
       virtual_device.user_callback_ctr[0][USB_TRANSACTION_IN](&virtual_device,
-                                                               0);
+                                                              0);
     }
     if (virtual_device.control_state.state == LAST_DATA_IN) {
       virtual_device.user_callback_ctr[0][USB_TRANSACTION_IN](&virtual_device,
-                                                               0);
+                                                              0);
     }
     if (virtual_device.control_state.state == STATUS_OUT) {
       virtual_device.user_callback_ctr[0][USB_TRANSACTION_OUT](&virtual_device,
-                                                                0);
+                                                               0);
     }
   } else if (!control_stalled &&
              virtual_device.control_state.state == STATUS_IN) {
-    virtual_device.user_callback_ctr[0][USB_TRANSACTION_IN](&virtual_device,
-                                                             0);
+    virtual_device.user_callback_ctr[0][USB_TRANSACTION_IN](&virtual_device, 0);
   }
-  *stalled = control_stalled ||
-             virtual_device.control_state.state == STALLED;
+  *stalled = control_stalled || virtual_device.control_state.state == STALLED;
   *response = control_in_data;
   *response_length = control_in_length;
   control_active = false;
@@ -561,9 +582,9 @@ static bool firmware_control_transfer(void *context, const uint8_t setup[8],
 static uint32_t send_configuration(void) {
   uint8_t *bundle = NULL;
   size_t bundle_length = 0;
-  if (!ugsp_discover_usb_personality(
-          UGSP_USB_SPEED_FULL, firmware_control_transfer, NULL, &bundle,
-          &bundle_length)) {
+  if (!ugsp_discover_usb_personality(UGSP_USB_SPEED_FULL,
+                                     firmware_control_transfer, NULL, &bundle,
+                                     &bundle_length)) {
     die_message("USB personality discovery failed");
   }
   _usbd_reset(&virtual_device);
@@ -576,13 +597,127 @@ static uint32_t send_configuration(void) {
   return request_id;
 }
 
+static bool functionfs_generation_ended(void) {
+  return errno == ENODEV || errno == ESHUTDOWN || errno == EPIPE;
+}
+
+static void *endpoint_thread_main(void *context) {
+  struct virtual_endpoint *endpoint = context;
+  for (;;) {
+    ssize_t length;
+    do {
+      length = read(endpoint->functionfs_fd, endpoint->read_data,
+                    endpoint->max_packet_size);
+    } while (length < 0 && errno == EINTR);
+    if (length < 0) {
+      if (functionfs_generation_ended()) {
+        break;
+      }
+      die_errno("read FunctionFS OUT endpoint");
+    }
+    if ((size_t)length > endpoint->max_packet_size) {
+      die_message("FunctionFS produced an oversized OUT transfer");
+    }
+
+    int result = pthread_mutex_lock(&endpoint->transfer_mutex);
+    if (result != 0) {
+      errno = result;
+      die_errno("lock completed OUT endpoint transfer");
+    }
+    if (endpoint->transfer_occupied) {
+      pthread_mutex_unlock(&endpoint->transfer_mutex);
+      die_message("FunctionFS completed OUT transfer before firmware consumed "
+                  "the preceding transfer");
+    }
+    if (length != 0) {
+      memcpy(endpoint->transfer_data, endpoint->read_data, (size_t)length);
+    }
+    endpoint->transfer_length = (uint16_t)length;
+    endpoint->transfer_occupied = true;
+    int unlock_result = pthread_mutex_unlock(&endpoint->transfer_mutex);
+    if (unlock_result != 0) {
+      errno = unlock_result;
+      die_errno("unlock completed OUT endpoint transfer");
+    }
+
+    uint64_t notification = 1;
+    ssize_t notified;
+    do {
+      notified = write(endpoint->event_fd, &notification, sizeof(notification));
+    } while (notified < 0 && errno == EINTR);
+    if (notified != (ssize_t)sizeof(notification)) {
+      die_errno("notify firmware of completed OUT transfer");
+    }
+  }
+
+  return NULL;
+}
+
+static void stop_endpoint_threads(void) {
+  for (size_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
+    struct virtual_endpoint *endpoint = &endpoints[number][0];
+    if (endpoint->thread_running) {
+      int result = pthread_cancel(endpoint->thread);
+      if (result == 0) {
+        result = pthread_join(endpoint->thread, NULL);
+      }
+      if (result != 0) {
+        errno = result;
+        die_errno("cancel or join OUT endpoint thread");
+      }
+      endpoint->thread_running = false;
+    }
+    if (endpoint->event_fd >= 0) {
+      close(endpoint->event_fd);
+      endpoint->event_fd = -1;
+    }
+    free(endpoint->transfer_data);
+    endpoint->transfer_data = NULL;
+    free(endpoint->read_data);
+    endpoint->read_data = NULL;
+    endpoint->transfer_length = 0;
+    endpoint->transfer_occupied = false;
+  }
+}
+
+static void start_endpoint_threads(void) {
+  for (size_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
+    struct virtual_endpoint *endpoint = &endpoints[number][0];
+    if (endpoint->functionfs_fd < 0) {
+      continue;
+    }
+    if (endpoint->max_packet_size == 0) {
+      die_message("start zero-sized FunctionFS OUT endpoint");
+    }
+    endpoint->transfer_data = malloc(endpoint->max_packet_size);
+    endpoint->read_data = malloc(endpoint->max_packet_size);
+    if (endpoint->transfer_data == NULL || endpoint->read_data == NULL) {
+      die_errno("allocate OUT endpoint transfer handoff");
+    }
+    endpoint->transfer_length = 0;
+    endpoint->transfer_occupied = false;
+    endpoint->event_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (endpoint->event_fd < 0) {
+      die_errno("create OUT endpoint notification");
+    }
+    int result =
+        pthread_create(&endpoint->thread, NULL, endpoint_thread_main, endpoint);
+    if (result != 0) {
+      errno = result;
+      die_errno("start OUT endpoint thread");
+    }
+    endpoint->thread_running = true;
+  }
+}
+
 static void close_usb_endpoints(void) {
   usb_enabled = false;
+  stop_endpoint_threads();
   for (size_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
     for (size_t direction = 0; direction < 2; direction++) {
-      if (endpoints[number][direction].fd >= 0) {
-        close(endpoints[number][direction].fd);
-        endpoints[number][direction].fd = -1;
+      if (endpoints[number][direction].functionfs_fd >= 0) {
+        close(endpoints[number][direction].functionfs_fd);
+        endpoints[number][direction].functionfs_fd = -1;
       }
     }
   }
@@ -602,14 +737,15 @@ static void install_usb_endpoints(struct worker_record *record) {
   for (size_t i = 0; i < count; i++) {
     const uint8_t *entry = record->body + 2 + i * 4;
     struct virtual_endpoint *endpoint = endpoint_for(entry[0]);
-    if (endpoint == NULL || (entry[0] & 0x7f) == 0 || endpoint->fd >= 0) {
+    if (endpoint == NULL || (entry[0] & 0x7f) == 0 ||
+        endpoint->functionfs_fd >= 0) {
       close_record_fds(record);
       die_message("invalid or duplicate USB endpoint address");
     }
     endpoint->address = entry[0];
     endpoint->type = entry[1];
     endpoint->max_packet_size = be16(entry + 2);
-    endpoint->fd = record->fds[i];
+    endpoint->functionfs_fd = record->fds[i];
     record->fds[i] = -1;
   }
   record->fd_count = 0;
@@ -651,20 +787,31 @@ static bool configure_until_endpoints(bool replacement) {
 
 static void handle_usb_bus_event(const struct worker_record *record) {
   if (record->generation != generation || record->request_id != 0 ||
-      record->body_length != 1 || record->fd_count != 0) {
+      record->body_length != UGSP_USB_BUS_EVENT_BODY_LENGTH ||
+      record->fd_count != 0) {
     die_message("invalid supervisor USB bus event");
   }
+  uint64_t activation = ugsp_read_be64(record->body + 1);
+  if ((record->body[0] == 5 || record->body[0] == 6) &&
+      activation != endpoint_activation) {
+    die_message("USB suspend/resume changed endpoint activation");
+  }
+  endpoint_activation = activation;
   switch (record->body[0]) {
   case 0: /* bind */
     usb_enabled = false;
+    stop_endpoint_threads();
     _usbd_reset(&virtual_device);
     break;
   case 1: /* unbind */
   case 3: /* disable */
     usb_enabled = false;
+    stop_endpoint_threads();
     _usbd_reset(&virtual_device);
     break;
   case 2: { /* enable */
+    worker_timer_resume();
+    worker_display_resume();
     if (usb_enabled) {
       break;
     }
@@ -678,11 +825,12 @@ static void handle_usb_bus_event(const struct worker_record *record) {
     if (stalled) {
       die_message("firmware rejected SET_CONFIGURATION(1)");
     }
+    start_endpoint_threads();
     usb_enabled = true;
-    worker_display_resume();
     break;
   }
   case 5: /* suspend */
+    worker_timer_suspend();
     if (virtual_device.user_callback_suspend != NULL) {
       virtual_device.user_callback_suspend();
     }
@@ -697,6 +845,7 @@ static void handle_usb_bus_event(const struct worker_record *record) {
     worker_display_suspend();
     break;
   case 6: /* resume */
+    worker_timer_resume();
     if (virtual_device.user_callback_resume != NULL) {
       virtual_device.user_callback_resume();
     }
@@ -723,9 +872,8 @@ static void handle_usb_control_request(const struct worker_record *record) {
   uint8_t *firmware_response;
   size_t firmware_response_length;
   bool stalled;
-  run_control_transfer(setup, record->body + 8, out_length,
-                       &firmware_response, &firmware_response_length,
-                       &stalled);
+  run_control_transfer(setup, record->body + 8, out_length, &firmware_response,
+                       &firmware_response_length, &stalled);
   if (stalled) {
     uint8_t disposition = RESPONSE_STALL;
     send_record(KIND_USB_CONTROL_RESPONSE, generation, record->request_id,
@@ -762,17 +910,30 @@ static void handle_quiesce(const struct worker_record *record) {
   _usbd_reset(&virtual_device);
 }
 
+static void handle_runtime_record(struct worker_record *record) {
+  if (record->kind == KIND_QUIESCE) {
+    handle_quiesce(record);
+  } else if (record->kind == KIND_USB_BUS_EVENT) {
+    handle_usb_bus_event(record);
+  } else if (record->kind == KIND_USB_CONTROL_REQUEST) {
+    handle_usb_control_request(record);
+  } else {
+    close_record_fds(record);
+    die_message("unexpected runtime supervisor record");
+  }
+}
+
 static void service_virtual_usb(int timeout_ms) {
   struct pollfd pollfds[2 + MAX_ENDPOINT_NUMBER];
   size_t count = 0;
   size_t control_index = count;
-  pollfds[count++] = (struct pollfd){
-      .fd = control_fd, .events = POLLIN | POLLHUP | POLLERR};
+  pollfds[count++] =
+      (struct pollfd){.fd = control_fd, .events = POLLIN | POLLHUP | POLLERR};
   int button_index = -1;
   if (buttonEventFd() >= 0) {
     button_index = (int)count;
-    pollfds[count++] = (struct pollfd){
-        .fd = buttonEventFd(), .events = POLLIN | POLLPRI};
+    pollfds[count++] =
+        (struct pollfd){.fd = buttonEventFd(), .events = POLLIN | POLLPRI};
   }
   uint8_t endpoint_numbers[MAX_ENDPOINT_NUMBER];
   size_t endpoint_indices[MAX_ENDPOINT_NUMBER];
@@ -780,13 +941,13 @@ static void service_virtual_usb(int timeout_ms) {
   if (usb_enabled) {
     for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
       struct virtual_endpoint *endpoint = &endpoints[number][0];
-      if (endpoint->fd >= 0 &&
+      if (endpoint->event_fd >= 0 &&
           virtual_device.user_callback_ctr[number][USB_TRANSACTION_OUT] !=
               NULL) {
         endpoint_numbers[endpoint_count] = number;
         endpoint_indices[endpoint_count++] = count;
         pollfds[count++] =
-            (struct pollfd){.fd = endpoint->fd, .events = POLLIN};
+            (struct pollfd){.fd = endpoint->event_fd, .events = POLLIN};
       }
     }
   }
@@ -800,16 +961,7 @@ static void service_virtual_usb(int timeout_ms) {
   if (pollfds[control_index].revents != 0) {
     struct worker_record record;
     receive_record(&record, MSG_DONTWAIT);
-    if (record.kind == KIND_QUIESCE) {
-      handle_quiesce(&record);
-    } else if (record.kind == KIND_USB_BUS_EVENT) {
-      handle_usb_bus_event(&record);
-    } else if (record.kind == KIND_USB_CONTROL_REQUEST) {
-      handle_usb_control_request(&record);
-    } else {
-      close_record_fds(&record);
-      die_message("unexpected runtime supervisor record");
-    }
+    handle_runtime_record(&record);
   }
   if (button_index >= 0) {
     if (pollfds[button_index].revents != 0) {
@@ -824,10 +976,28 @@ static void service_virtual_usb(int timeout_ms) {
     }
     if ((events & POLLIN) != 0) {
       uint8_t number = endpoint_numbers[i];
+      uint64_t notification;
+      ssize_t length;
+      do {
+        length = read(endpoints[number][0].event_fd, &notification,
+                      sizeof(notification));
+      } while (length < 0 && errno == EINTR);
+      if (length != (ssize_t)sizeof(notification) || notification != 1) {
+        die_message("invalid OUT endpoint completion notification");
+      }
       virtual_device.user_callback_ctr[number][USB_TRANSACTION_OUT](
           &virtual_device, number);
     }
   }
+}
+
+static void service_virtual_usb_until_resumed(uint32_t firmware_timeout_ms) {
+  do {
+    int effective_timeout =
+        worker_poll_timeout_ms(worker_timer_is_suspended(), firmware_timeout_ms,
+                               worker_display_retry_timeout_ms());
+    service_virtual_usb(effective_timeout);
+  } while (worker_timer_is_suspended());
 }
 
 void usbInit(void) {
@@ -835,17 +1005,16 @@ void usbInit(void) {
   if (!configure_until_endpoints(false)) {
     die_message("initial USB configuration was rejected");
   }
-  fputs("virtual-trezor: legacy USB stack is serving through virtual endpoints\n",
-        stderr);
+  fputs(
+      "virtual-trezor: legacy USB stack is serving through virtual endpoints\n",
+      stderr);
 }
 
 void usbPoll(void) { firmwareUsbPoll(); }
 
 void waitAndProcessUSBRequests(uint32_t millis) {
   emulatorPoll();
-  int timeout =
-      worker_poll_timeout_ms(millis, worker_display_retry_timeout_ms());
-  service_virtual_usb(timeout);
+  service_virtual_usb_until_resumed(millis);
   /* firmwareUsbPoll() also invokes the controller poll hook before flushing
    * pending replies. The service above already performed that pass, so avoid
    * a second immediate poll while retaining the genuine firmware's
@@ -855,28 +1024,18 @@ void waitAndProcessUSBRequests(uint32_t millis) {
   controller_already_serviced = false;
 }
 
-void usbReconnect(void) {
-  (void)configure_until_endpoints(true);
-}
+void usbReconnect(void) { (void)configure_until_endpoints(true); }
 
 char usbTiny(char set) { return firmwareUsbTiny(set); }
 
 void usbFlush(uint32_t millis) {
-  struct timespec start;
-  if (clock_gettime(CLOCK_MONOTONIC, &start) != 0) {
-    die_errno("read monotonic clock");
-  }
+  uint32_t start = timer_ms();
   for (;;) {
     firmwareUsbPoll();
-    struct timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-      die_errno("read monotonic clock");
-    }
-    uint64_t elapsed = (uint64_t)(now.tv_sec - start.tv_sec) * 1000U +
-                       (uint64_t)(now.tv_nsec - start.tv_nsec) / 1000000U;
+    uint32_t elapsed = timer_ms() - start;
     if (elapsed >= millis) {
       return;
     }
-    service_virtual_usb((int)(millis - elapsed));
+    service_virtual_usb_until_resumed(millis - elapsed);
   }
 }
