@@ -16,10 +16,11 @@ int main(void) {
   assert(button_gpio_pressed(BUTTON_GPIO_CENTER_LINE) ==
          (BUTTON_GPIO_NO_PRESSED | BUTTON_GPIO_YES_PRESSED));
 
-  assert(worker_poll_timeout_ms(10, -1) == 10);
-  assert(worker_poll_timeout_ms(10, 0) == 0);
-  assert(worker_poll_timeout_ms(10, 1000) == 10);
-  assert(worker_poll_timeout_ms(UINT32_MAX, -1) == INT_MAX);
+  assert(worker_poll_timeout_ms(false, 10, -1) == 10);
+  assert(worker_poll_timeout_ms(false, 10, 0) == 0);
+  assert(worker_poll_timeout_ms(false, 10, 1000) == 10);
+  assert(worker_poll_timeout_ms(false, UINT32_MAX, -1) == INT_MAX);
+  assert(worker_poll_timeout_ms(true, 10, -1) == -1);
 
   char error[160];
   char *default_arguments[] = {"virtual-trezor-worker"};

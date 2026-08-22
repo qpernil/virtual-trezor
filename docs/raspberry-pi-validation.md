@@ -39,7 +39,8 @@ software may deliberately reject protected wallet operations.
 Inspect the running worker and confirm:
 
 - it runs as the configured non-root account;
-- it holds fixed control FD 3 plus four nonblocking endpoint-proxy sockets;
+- it holds fixed control FD 3 plus four direction-specific FunctionFS data
+  endpoints, with one reader thread and one `eventfd` per OUT endpoint;
 - it has no descriptor-number or device-path environment variables and never
   opens `/dev/ffs-*`;
 - supervisor `BIND`, `ENABLE`, `DISABLE`, `UNBIND`, `SUSPEND`, `RESUME`, and
@@ -54,7 +55,8 @@ supervisor process must unbind, remove the old gadget and mount, start a fresh
 worker with fresh FDs, rebind, and return the UDC to `configured`.
 
 Exercise `usbReconnect()` and confirm the supervisor asks the existing worker
-to quiesce, replaces FunctionFS and the OUT/IN proxies, unbinds and rebinds the UDC, and re-enumerates
+to quiesce, replaces FunctionFS and the OUT/IN endpoint files, unbinds and
+rebinds the UDC, and re-enumerates
 without changing the worker PID. Separately kill the worker and confirm that
 process failure still causes a complete fresh-process cycle. Stopping the
 systemd service must perform final teardown without creating another worker.
@@ -64,9 +66,16 @@ The worker PID and USB generation must survive. Accept either a direct
 `SUSPEND`/`RESUME` or a wake-time `SUSPEND`/`DISABLE`/`ENABLE`; confirm traffic
 continues afterward. Confirm the suspend log reports a completed flash
 checkpoint, the display turns off while suspended, and resume redraws the
-current framebuffer. If the host supplies the Pi's only power, first determine
-whether that machine and hub retain VBUS during sleep—VBUS loss cold-boots the
-Pi and cannot be handled as a USB event.
+current framebuffer. The worker should consume no periodic 10 ms wakeups while
+suspended, and a firmware deadline that was pending before suspend should have
+the same remaining duration after resume. If the host supplies the Pi's only
+power, first determine whether that machine and hub retain VBUS during
+sleep—VBUS loss cold-boots the Pi and cannot be handled as a USB event.
+
+For ST7789, distinguish the two dark states physically: normal firmware
+screensaver blanking leaves the backlight on, while USB suspend turns the
+backlight off. Resume powers the backend again even when the firmware
+framebuffer remains black.
 
 ## Display and buttons
 

@@ -27,7 +27,8 @@ if [[ ! -f "$DISPLAY_BACKENDS_DIR/Cargo.toml" ]]; then
   echo "Missing sibling display-backends checkout: $DISPLAY_BACKENDS_DIR" >&2
   exit 1
 fi
-if [[ ! -f "$USB_GADGET_SUPERVISOR_DIR/worker/usb_personality_ffi.h" ]]; then
+if [[ ! -f "$USB_GADGET_SUPERVISOR_DIR/worker/usb_personality_ffi.h" ||
+      ! -f "$USB_GADGET_SUPERVISOR_DIR/worker/usb_worker_protocol.h" ]]; then
   echo "Missing sibling usb-gadget-supervisor checkout: $USB_GADGET_SUPERVISOR_DIR" >&2
   exit 1
 fi
@@ -59,9 +60,14 @@ make -C "$LEGACY_DIR/firmware" -f "$PROJECT_ROOT/mk/worker-firmware.mk" clean
 make -C "$LEGACY_DIR" clean
 make -C "$LEGACY_DIR/emulator" clean
 
-make -C "$LEGACY_DIR/emulator" setup.o memory.o timer.o strl.o
+make -C "$LEGACY_DIR/emulator" setup.o memory.o strl.o
+"${CC:-cc}" ${CFLAGS:-} -DEMULATOR=1 -I"$LEGACY_DIR" \
+  -I"$PROJECT_ROOT/platform/raspberry-pi" -MMD -MP \
+  -o "$LEGACY_DIR/emulator/timer.o" -c \
+  "$PROJECT_ROOT/platform/raspberry-pi/timer_linux.c"
 # Build only the non-UI host facilities needed by the firmware worker. USB,
-# display, and buttons are supplied entirely by project platform objects.
+# display, buttons, and the suspend-aware timer are supplied by project
+# platform objects.
 ar rcs "$LEGACY_DIR/emulator/libemulator.a" \
   "$LEGACY_DIR/emulator/setup.o" \
   "$LEGACY_DIR/emulator/memory.o" \

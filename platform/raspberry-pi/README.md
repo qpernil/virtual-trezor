@@ -11,7 +11,7 @@ The current replacement surface is:
 
 | Replacement | Responsibility |
 | --- | --- |
-| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; virtual controller, supervisor records, packet proxies, and liveness |
+| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; virtual controller, supervisor records, direct FunctionFS endpoints, and liveness |
 | `buttons_gpio.c` | `buttonRead`; logical No/Yes/center values and edge events through one inherited input-line handle |
 | `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; pass the framebuffer and inherited descriptors through the `display-backends` C ABI |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
@@ -22,29 +22,39 @@ Firmware initialization creates the genuine device/configuration/string,
 Microsoft OS 1.0, and WebUSB responses. The shared supervisor library's direct
 discovery parser issues control requests through one C callback and serializes
 the resulting typed USB personality as CBOR. The supervisor projects it into
-ConfigFS and FunctionFS, then transfers one nonblocking packet proxy per OUT or
-IN endpoint back to the worker. The supervisor retains `ep0` and all raw
-FunctionFS files. The worker never opens the FunctionFS mount. DebugLink is disabled. The
+ConfigFS and FunctionFS, then transfers each actual OUT or IN endpoint file
+back to the worker. The supervisor retains `ep0` and never accesses data
+traffic. The worker never opens the FunctionFS mount. DebugLink is disabled. The
 firmware-discovered normal configuration includes both the main vendor
 interface and U2F HID, with four data endpoints in total.
 
-FunctionFS synchronous endpoint waits live in generation-scoped supervisor
-pumps. OUT pumps forward complete host packets through local `SOCK_SEQPACKET`
-queues; IN pumps drain equivalent queues into FunctionFS after the firmware
-enqueues replies. The worker has no helper threads. Its firmware thread polls
-the nonblocking OUT queues together with supervisor control, buttons, and its
-bounded timer, then invokes the genuine firmware callback for at most one
-packet per endpoint per cycle. This keeps firmware timers and quiesce requests
-responsive while retaining packet boundaries and the firmware's
-enqueue-and-return controller semantics. The timed platform wait suppresses the genuine firmware
-poll's immediately repeated virtual-controller pass, but retains that call's
-pending-reply flush; direct firmware `usbPoll()` calls continue to perform a
-normal nonblocking controller pass.
+Each blocking FunctionFS OUT endpoint has one worker-owned reader thread. The
+thread blocks only in the real endpoint read, publishes exactly one completed
+transfer in a single handoff slot, and wakes the firmware poll loop through an
+`eventfd`. The genuine firmware callback consumes that transfer. Completion of
+another FunctionFS read while the preceding handoff remains unconsumed is an
+invariant failure, not an invitation for the virtual controller to assemble or
+buffer a higher-level message. That assembly remains in the genuine firmware.
+
+IN has no helper or handoff. `usbd_ep_write_packet()` writes the firmware's
+transfer directly to the blocking FunctionFS IN endpoint. The host-side
+request/response flow provides the natural rendezvous. There is no internal
+framing, acknowledgement, socket, or data queue in either direction, and a
+zero-length FunctionFS operation remains a zero-length USB transfer. The timed
+platform wait suppresses the genuine firmware poll's immediately repeated
+virtual-controller pass, but retains that call's pending-reply flush; direct
+firmware `usbPoll()` calls continue to perform a normal controller pass.
+
+Suspend retains pending traffic and the existing handles. Disable lets the
+kernel cancel FunctionFS operations and retires the OUT readers; the following
+enable starts fresh readers on the same handles. Neither path restarts the
+worker.
 
 USB configuration state is tracked separately from the supervisor's UDC
 binding state. `BIND`, `ENABLE`, `DISABLE`, `UNBIND`, `SUSPEND`, and `RESUME`
 records drive the virtual controller. Suspend/resume preserves endpoint and
-firmware state; disable/enable resets and reconfigures it. Merely closing a host
+firmware state and pending traffic; disable/enable resets and reconfigures it
+without replacing the FunctionFS handles. Merely closing a host
 application handle is not a USB lifecycle event.
 
 `usbReconnect()` performs a live USB-generation replacement. The worker sends
@@ -101,8 +111,13 @@ part of display initialization.
 USB suspend also checkpoints the mapped emulator flash and turns the panel
 off. USB resume, or enable after a reset-style wake, reinitializes it and
 redraws the unchanged firmware framebuffer. Display refreshes are suppressed
-while suspended, so the dark panel is a stable visual indication that the host
-link is suspended.
+while suspended. The worker remains blocked on its pollable supervisor control
+socket instead of returning to the firmware's 10 ms loop, and its platform
+timer excludes the suspended interval. Firmware deadlines therefore resume
+from where they stopped rather than expiring during host sleep.
+On ST7789 hardware this is visibly distinct from the firmware screensaver:
+the screensaver writes a black framebuffer while leaving the backlight on,
+whereas USB suspend shuts the backend down and turns the backlight off.
 
 The ST7789 profile assigns GPIO25 Data/Command, GPIO27 reset, and GPIO24
 backlight to its inherited output handle. The backend uses SPI mode 0 at 62.5
