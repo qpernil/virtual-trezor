@@ -98,6 +98,12 @@ off. This covers service stops and requested USB reincarnations. `SIGKILL`
 cannot run process cleanup; the replacement worker clears the panel again as
 part of display initialization.
 
+USB suspend also checkpoints the mapped emulator flash and turns the panel
+off. USB resume, or enable after a reset-style wake, reinitializes it and
+redraws the unchanged firmware framebuffer. Display refreshes are suppressed
+while suspended, so the dark panel is a stable visual indication that the host
+link is suspended.
+
 The ST7789 profile assigns GPIO25 Data/Command, GPIO27 reset, and GPIO24
 backlight to its inherited output handle. The backend uses SPI mode 0 at 62.5
 MHz. It clears the native 240x240 panel

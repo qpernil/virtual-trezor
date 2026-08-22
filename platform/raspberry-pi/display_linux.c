@@ -22,6 +22,7 @@
 
 static DisplayBackendsHandle *display = NULL;
 static bool error_reported = false;
+static bool suspended = false;
 static uint64_t retry_after_ms = 0;
 
 static uint64_t monotonic_ms(void) {
@@ -85,6 +86,9 @@ static bool initialize_display(void) {
 }
 
 static void write_framebuffer(void) {
+  if (suspended) {
+    return;
+  }
   if (display == NULL && !initialize_display()) {
     return;
   }
@@ -98,6 +102,7 @@ static void write_framebuffer(void) {
 }
 
 void worker_display_shutdown(void) {
+  suspended = true;
   if (display == NULL) {
     return;
   }
@@ -111,6 +116,36 @@ void worker_display_shutdown(void) {
             worker_display_backend_name());
   }
   release_display();
+}
+
+void worker_display_suspend(void) {
+  if (suspended) {
+    return;
+  }
+  suspended = true;
+
+  if (display == NULL) {
+    return;
+  }
+
+  int error = display_backends_shutdown(display);
+  if (error != 0) {
+    fprintf(stderr, "virtual-trezor: %s display suspend failed: %s\n",
+            worker_display_backend_name(), strerror(error));
+  } else {
+    fprintf(stderr, "virtual-trezor: %s display off for USB suspend\n",
+            worker_display_backend_name());
+  }
+  release_display();
+}
+
+void worker_display_resume(void) {
+  if (!suspended) {
+    return;
+  }
+  suspended = false;
+  retry_after_ms = 0;
+  write_framebuffer();
 }
 
 void oledInit(void) { write_framebuffer(); }
