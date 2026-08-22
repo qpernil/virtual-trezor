@@ -61,8 +61,8 @@ pieces:
 - FunctionFS USB endpoints inherited from the supervisor in place of UDP;
 - GPIO-backed Core button input in place of SDL events;
 - a display adapter that submits Core's framebuffer to `display-backends`;
-- the supervisor's fixed-descriptor startup, resource, control, and liveness
-  protocol;
+- the supervisor's named-resource, CBOR personality, endpoint-generation, and
+  liveness protocol;
 - file-backed state rooted in the dedicated Safe 3 state directory; and
 - an event-driven system wait in place of the Unix emulator's periodic idle
   polling.
@@ -119,15 +119,17 @@ should match the non-debug interfaces expected from the selected upstream
 model, including any separately described HID function. Debug interfaces must
 remain disabled in the normal profile.
 
-The supervisor's Microsoft OS 1.0 and WebUSB profile support is reusable for
-this worker. The Safe 3 profile must nevertheless derive its VID/PID,
-interface ordering, WinUSB compatible IDs or successor Microsoft descriptors,
-interface GUIDs, BOS capabilities, and vendor request codes from the selected
-Safe 3 firmware rather than copying the legacy Trezor One byte table.
+The supervisor's typed Microsoft OS 1.0 and WebUSB projection is reusable for
+this worker. Safe 3 discovery must derive its VID/PID, interface ordering,
+WinUSB compatible IDs or successor Microsoft descriptors, interface GUIDs,
+BOS capabilities, and vendor request codes from the selected firmware rather
+than copying the legacy Trezor One byte table.
 
 Worker startup, readiness, shutdown, supervisor loss, and endpoint recovery
-must use the existing fixed-descriptor supervisor protocol rather than adding
-a model-specific privileged control path.
+must use the shared CBOR personality and endpoint-generation protocol rather
+than adding a model-specific privileged control path. A Rust Core worker may
+call the discovery parser directly; only a C firmware boundary needs the small
+callback FFI adapter.
 
 ## Idle behavior and timing
 
