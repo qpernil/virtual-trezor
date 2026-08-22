@@ -98,6 +98,14 @@ generation is disturbed.
 
 Host sleep is a normal firmware lifecycle, not a process restart. A
 `SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.
+On suspend the worker first invokes the firmware callback, synchronously
+checkpoints the mapped emulator flash image, and turns the display off. Resume,
+or a reset-style wake followed by enable, reinitializes the display and
+retransmits the current framebuffer, providing a visible indication of host
+sleep without restarting the firmware. The focused
+flash checkpoint avoids stalling on unrelated filesystems; it is an
+opportunistic safeguard rather than a guarantee that power will remain long
+enough to complete it.
 If wake resets the link, `DISABLE`/`ENABLE` resets the virtual controller and
 replays firmware configuration while leaving the worker alive. If USB VBUS is
 the Pi's only power and the host removes it, the result is necessarily a cold

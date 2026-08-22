@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -21,6 +22,7 @@
 
 #include "buttons_gpio.h"
 #include "display_linux.h"
+#include "memory.h"
 #include "poll_timeout.h"
 #include "usb.h"
 #include "usb_functionfs.h"
@@ -677,17 +679,28 @@ static void handle_usb_bus_event(const struct worker_record *record) {
       die_message("firmware rejected SET_CONFIGURATION(1)");
     }
     usb_enabled = true;
+    worker_display_resume();
     break;
   }
   case 5: /* suspend */
     if (virtual_device.user_callback_suspend != NULL) {
       virtual_device.user_callback_suspend();
     }
+    if (emulator_flash_base != NULL &&
+        msync(emulator_flash_base, FLASH_TOTAL_SIZE, MS_SYNC) != 0) {
+      fprintf(stderr,
+              "virtual-trezor: flash checkpoint on USB suspend failed: %s\n",
+              strerror(errno));
+    } else if (emulator_flash_base != NULL) {
+      fputs("virtual-trezor: flash checkpointed on USB suspend\n", stderr);
+    }
+    worker_display_suspend();
     break;
   case 6: /* resume */
     if (virtual_device.user_callback_resume != NULL) {
       virtual_device.user_callback_resume();
     }
+    worker_display_resume();
     break;
   default:
     die_message("unknown supervisor USB bus event");
