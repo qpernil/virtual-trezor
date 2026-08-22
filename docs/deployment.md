@@ -68,6 +68,7 @@ Clone and initialize only the selected Trezor One dependencies:
 
 ```sh
 git clone https://github.com/qpernil/display-backends.git
+git clone https://github.com/qpernil/usb-gadget-supervisor.git
 git clone https://github.com/qpernil/virtual-trezor.git
 cd virtual-trezor
 make init
@@ -75,7 +76,10 @@ make check
 make worker
 ```
 
-The resulting executable is `build/virtual-trezor-worker`.
+Keep all three repositories as siblings. The worker links the current
+`display-backends` native library and the supervisor repository's shared
+`usb-gadget-worker` discovery/CBOR static library. The resulting executable is
+`build/virtual-trezor-worker`.
 
 ## Install the supervisor and worker
 

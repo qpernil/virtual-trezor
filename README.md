@@ -81,8 +81,9 @@ replacing the Raspberry Pi hardware boundary:
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
   the generic OLED framebuffer, file-backed flash, timer, and randomness;
 - exclude both UDP source files and the upstream SDL display/button objects;
-- supply FunctionFS USB, the fixed-FD supervisor control channel, Linux
-  display, and inherited GPIO-line button implementations from
+- supply a virtual `libopencm3` USB controller, nonblocking endpoint proxies,
+  the supervisor control channel, Linux display, and inherited GPIO-line button
+  implementations from
   `platform/raspberry-pi`;
 - block the Linux worker in `poll` only until the deadline requested by the
   upstream firmware, normally 10 ms, so idle CPU remains low without delaying
@@ -97,17 +98,19 @@ reaches on-device confirmation workflows. Production Suite reports the
 expected firmware-integrity failure and refuses cryptocurrency transaction
 operations because this worker is not authenticated production firmware.
 Recovery remains unvalidated.
-The FunctionFS descriptor set currently exposes only the main Trezor vendor
-interface, so the separate U2F HID interface is also pending. The same blob
-associates interface zero with Windows' inbox WinUSB driver through Microsoft
-OS 1.0 compatible-ID and interface-GUID descriptors. The supervisor also
-publishes the upstream-compatible WebUSB BOS capability, without a landing
-page. WinUSB supplies the Windows driver; WebUSB separately enables
-permissioned browser discovery and access. These profiles report device release
-`1.01`: release `1.00` predated the Microsoft OS descriptors, and Windows does
-not repeat a failed OS-descriptor probe for the same VID/PID/device-release
-tuple. Automatic binding to Microsoft's inbox WinUSB driver was validated on
-Windows with the `1.01` profile on 2026-08-22; no custom INF is required.
+The current firmware configuration exposes only the main Trezor vendor
+interface and the U2F HID interface, with two interrupt endpoints each. USB
+identity is no longer copied into the TOML profiles. At startup a shared discovery parser
+asks the genuine legacy control engine for its device, configuration, string,
+Microsoft OS 1.0, and WebUSB descriptors. It serializes the resulting typed
+personality as CBOR; the supervisor validates and projects it into ConfigFS and
+FunctionFS. Thus interface zero receives the firmware's `WINUSB` compatible ID
+and interface GUID, while its BOS reports WebUSB 1.0 without a landing page.
+WinUSB supplies the Windows driver; WebUSB separately enables permissioned
+browser discovery and access. The worker reports the firmware's device release
+`1.00` without a virtual override. Windows may retain a cached result from an
+earlier gadget with the same identity; clearing that host-side cache is an
+operational concern rather than part of descriptor discovery.
 
 A real Trezor One uses SPI for its OLED. The physical-HAT backend therefore preserves that
 transport style, while I2C remains an intentional Raspberry Pi adaptation for
@@ -200,10 +203,11 @@ Never use this software to protect real funds, recovery seeds, passphrases, or
 other valuable secrets. Emulator randomness and file-backed storage are not
 hardware security.
 
-The USB VID/PID is retained for controlled, local emulator compatibility
-testing. The descriptor strings identify this implementation as virtual. The
-identifier is not a project assignment and must not be used for redistributed,
-manufactured, or commercial devices without permission from its owner.
+The USB VID/PID and descriptor strings come from the upstream firmware for
+controlled, local compatibility testing; they do not distinguish this worker
+from genuine hardware. The identifier is not a project assignment and must not
+be used for redistributed, manufactured, or commercial devices without
+permission from its owner.
 
 This independent integration is not affiliated with, sponsored by, or
 endorsed by Trezor Company. Trezor is a trademark of Trezor Company s.r.o.; the

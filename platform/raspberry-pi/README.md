@@ -11,48 +11,58 @@ The current replacement surface is:
 
 | Replacement | Responsibility |
 | --- | --- |
-| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; inherited FunctionFS endpoints, `ep0` events, and supervisor liveness |
+| `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; virtual controller, supervisor records, packet proxies, and liveness |
 | `buttons_gpio.c` | `buttonRead`; logical No/Yes/center values and edge events through one inherited input-line handle |
 | `display_linux.c` | `oledInit`, `oledRefresh`, recovery through `emulatorPoll`, and normal-exit clearing; pass the framebuffer and inherited descriptors through the `display-backends` C ABI |
 | `worker_main.c`, `worker_config.c` | Parse project-owned worker options before entering the renamed upstream firmware `main` |
 
-`usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`.
-The installed profile declares one vendor-specific main interface with 64-byte
-interrupt IN and OUT endpoints. The supervisor publishes it and transfers
-`ep0`, OUT, and IN in a fixed pre-bind bundle; the worker never opens the
-FunctionFS mount. Microsoft OS 1.0 descriptors associate interface zero with
-Windows' inbox WinUSB driver, and a separate BOS platform capability announces
-WebUSB 1.0. Neither changes the endpoint bundle seen by the worker. DebugLink
-is disabled. The separate U2F HID interface is deferred until the main
-Trezor/Suite transport is validated.
+`usb_functionfs.c` is compiled as the upstream firmware's expected `udp.o`, but
+implements a virtual `libopencm3` controller rather than a datagram transport.
+Firmware initialization creates the genuine device/configuration/string,
+Microsoft OS 1.0, and WebUSB responses. The shared supervisor library's direct
+discovery parser issues control requests through one C callback and serializes
+the resulting typed USB personality as CBOR. The supervisor projects it into
+ConfigFS and FunctionFS, then transfers one nonblocking packet proxy per OUT or
+IN endpoint back to the worker. The supervisor retains `ep0` and all raw
+FunctionFS files. The worker never opens the FunctionFS mount. DebugLink is disabled. The
+firmware-discovered normal configuration includes both the main vendor
+interface and U2F HID, with four data endpoints in total.
 
-The implementation intentionally processes one FunctionFS OUT packet per poll
-cycle. FunctionFS endpoint reads can block when a second packet is not queued,
-even when the endpoint was opened with `O_NONBLOCK`; returning to the firmware
-loop after each packet ensures generated replies are flushed immediately.
+FunctionFS synchronous endpoint waits live in generation-scoped supervisor
+pumps. OUT pumps forward complete host packets through local `SOCK_SEQPACKET`
+queues; IN pumps drain equivalent queues into FunctionFS after the firmware
+enqueues replies. The worker has no helper threads. Its firmware thread polls
+the nonblocking OUT queues together with supervisor control, buttons, and its
+bounded timer, then invokes the genuine firmware callback for at most one
+packet per endpoint per cycle. This keeps firmware timers and quiesce requests
+responsive while retaining packet boundaries and the firmware's
+enqueue-and-return controller semantics. The timed platform wait suppresses the genuine firmware
+poll's immediately repeated virtual-controller pass, but retains that call's
+pending-reply flush; direct firmware `usbPoll()` calls continue to perform a
+normal nonblocking controller pass.
 
-FunctionFS interface state is tracked separately from the supervisor's UDC
-binding state. `ENABLE`, `DISABLE`, `RESUME`, and `UNBIND` events from `ep0`
-control whether data endpoints are polled. This lets host software close and
-reopen the USB interface without stranding the worker or causing a busy loop.
+USB configuration state is tracked separately from the supervisor's UDC
+binding state. `BIND`, `ENABLE`, `DISABLE`, `UNBIND`, `SUSPEND`, and `RESUME`
+records drive the virtual controller. Suspend/resume preserves endpoint and
+firmware state; disable/enable resets and reconfigures it. Merely closing a host
+application handle is not a USB lifecycle event.
 
-The Pi FunctionFS driver can block a synchronous OUT endpoint read even when
-the file was opened with `O_NONBLOCK` and `poll` reported it readable. A small
-reader thread owns that blocking syscall and places complete 64-byte packets
-on a bounded queue signaled by `eventfd`. The firmware thread therefore
-continues to refresh the I2C display and sample buttons while host software
-waits for an on-device confirmation.
+`usbReconnect()` performs a live USB-generation replacement. The worker sends
+another complete CBOR personality, quiesces and closes its current endpoint
+FDs on request, installs the replacements, and acknowledges readiness before
+the supervisor rebinds the UDC. The firmware process survives the host-visible
+disconnect/re-enumeration.
 
 The I2C profile declares `/dev/i2c-1` as its required `display-i2c` resource.
-The supervisor opens it while privileged and appends its descriptor to the
-pre-bind bundle; the worker selects address `0x3c` and performs all
+The supervisor opens it while privileged and includes its descriptor in the
+initial named-resource record; the worker selects address `0x3c` and performs all
 device-specific transactions after privilege drop. The SPI profile places
 `/dev/spidev0.0` in the same fixed slot. The worker defaults to SH1106 SPI. The
 `--display=ssd1306-i2c|sh1106-i2c|sh1106-spi|st7789-spi` option overrides the backend;
 the two I2C controllers cannot be distinguished by probing because both
 normally use `0x3c`.
 
-The supervisor claims two exact GPIO v2 line groups. The next pre-bind slot is
+The supervisor claims two exact GPIO v2 line groups. The next resource is
 one display-control output handle, ordered as Data/Command then reset for
 SH1106. The ST7789 profile adds backlight as its third line. The following slot
 is one input/event handle ordered as No, Yes, then center. Its profile configures

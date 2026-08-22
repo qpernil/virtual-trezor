@@ -2,13 +2,14 @@
 
 ## Process boundary
 
-`usb-gadget-supervisor` creates the USB gadget, validates and publishes the
-profile's FunctionFS descriptors, opens the resulting endpoints and declared
-I2C/SPI devices, claims exact GPIO line groups, drops privileges, and launches
-this worker.
-The worker receives `ep0`, OUT, and IN as open file descriptors and owns all
-runtime USB traffic. It opens no USB path. The supervisor does not interpret
-Trezor messages or proxy secret material.
+`usb-gadget-supervisor` opens declared I2C/SPI devices, claims exact GPIO line
+groups, drops privileges, and launches this worker. The worker then publishes
+the USB personality obtained from the genuine firmware. The supervisor
+validates it, creates ConfigFS and FunctionFS, and retains every raw FunctionFS
+file. The worker receives nonblocking packet-proxy sockets for both interfaces'
+OUT and IN endpoints. `ep0` lifecycle and setup requests arrive as typed
+control-channel records. The worker opens no USB path. The supervisor preserves
+packet boundaries but does not interpret Trezor messages or secret material.
 
 A Pi currently provides one usable USB device controller. The supervisor can
 therefore select a Virtual Trezor or Virtual YubiKey profile, but it cannot
@@ -65,7 +66,8 @@ On the physical HAT, center maps to both logical Trezor buttons. The original
 two lines may instead be driven by the remote virtual-display process, whose
 middle click activates both.
 
-The platform wait polls USB, lifecycle, packet, and button descriptors for no
+The platform wait polls the supervisor control socket, endpoint proxies, and
+button descriptors for no
 longer than the timeout requested by the upstream firmware. Events and a due
 display-recovery deadline may wake it earlier. Preserving the firmware's 10 ms
 main-loop cadence keeps automatic lock, busy-screen expiry, and button state
@@ -78,10 +80,28 @@ USB has two emulator-specific layers that must both be excluded:
 - `legacy/emulator/udp.c` implements the localhost datagram sockets beneath
   those calls.
 
-The Pi port replaces the firmware-facing layer directly with inherited
-FunctionFS endpoint I/O and adds the supervisor resource/liveness connection. It does not
-reproduce the socket abstraction. Emulator flash, timer, and randomness remain
-in place; desktop SDL does not.
+The Pi port replaces the firmware-facing layer with a virtual `libopencm3`
+controller. The genuine firmware still initializes its USB stack, handles
+setup packets, configures endpoints, and processes packet callbacks as it would
+on hardware. A shared Rust discovery parser directly drives that controller
+through one control-transfer callback and returns the typed CBOR personality
+expected by the supervisor. At runtime supervisor control records and packet
+proxies drive the same virtual controller. Emulator flash, timer, and randomness
+remain in place; the UDP abstraction and desktop SDL do not.
+
+The supervisor control socket carries named hardware resources once, complete
+USB configurations from worker to supervisor, quiesce/serving lifecycle
+records, and replacement endpoint proxies. `usbReconnect()` republishes the
+firmware personality and causes a real UDC unbind/rebind while the firmware
+process survives. Invalid replacement CBOR is rejected before the active USB
+generation is disturbed.
+
+Host sleep is a normal firmware lifecycle, not a process restart. A
+`SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.
+If wake resets the link, `DISABLE`/`ENABLE` resets the virtual controller and
+replays firmware configuration while leaving the worker alive. If USB VBUS is
+the Pi's only power and the host removes it, the result is necessarily a cold
+boot instead of a software event.
 
 `mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
 supplies explicit rules for the project platform objects. The expected `udp.o`
@@ -97,12 +117,13 @@ upstream datagram implementation nor an SDL object is present in the worker.
    baseline.
 2. **In progress:** build the Pi worker with FunctionFS USB. Real
    USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
-   interactive confirmation are proven. The profile now publishes WinUSB
-   association descriptors and a WebUSB BOS capability matching the upstream
-   legacy firmware. Device release `1.01` prevents the earlier descriptorless
-   `1.00` enumeration result from suppressing Windows' Microsoft OS probe.
-   Fresh Windows enumeration and automatic inbox WinUSB binding are validated;
-   full Suite workflows and the separate U2F HID interface remain.
+   interactive confirmation are proven. The worker now discovers WinUSB
+   association descriptors and a WebUSB BOS capability directly from the
+   upstream legacy firmware rather than copying them into TOML. The worker
+   preserves firmware release `1.00`; any stale Windows result for an earlier
+   gadget with the same identity must be cleared on the host. Firmware
+   discovery restores both the main vendor interface and the U2F HID
+   interface; full Suite workflows remain.
 3. **Complete:** the genuine framebuffer is sent to a selectable SSD1306 or
    SH1106 I2C stream, with GPIO-backed buttons. Unit, full-worker, target
    electrical, second-Pi rendering, interactive-button, and 400 kHz

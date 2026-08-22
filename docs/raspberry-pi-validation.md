@@ -13,17 +13,20 @@ make worker
 ```
 
 Confirm the worker binary has no SDL/X11 dependencies and the selected profile
-contains the intended USB identity, FunctionFS blobs, display resource nodes,
-and worker arguments.
+contains only the intended FunctionFS mount, display resources, and worker
+arguments. It must not contain copied USB identity or descriptor blobs.
 
 ## USB enumeration and traffic
 
 Start the selected service with a data-capable host connection. Confirm:
 
 - UDC state becomes `configured`;
-- the host sees full-speed `1209:53c1`, product `Virtual Trezor`, and the
-  selected serial;
-- the main interface exposes 64-byte interrupt OUT and IN endpoints;
+- the host sees the firmware-reported full-speed `1209:53c1`, manufacturer
+  `SatoshiLabs`, product `TREZOR`, and configuration-derived serial;
+- the main interface and U2F HID interface each expose 64-byte interrupt OUT
+  and IN endpoints;
+- the service log contains the decoded personality obtained from the genuine
+  firmware, and its exact CBOR is saved under `/run/usb-gadget-supervisor`;
 - `trezorctl` discovers the device and reads model `1` firmware features;
 - a multi-packet ping round-trips unchanged; and
 - Trezor Suite reaches its expected firmware-check and confirmation workflow.
@@ -36,22 +39,32 @@ software may deliberately reject protected wallet operations.
 Inspect the running worker and confirm:
 
 - it runs as the configured non-root account;
-- it holds fixed control FD 3 plus FunctionFS `ep0`, OUT, and IN descriptors;
+- it holds fixed control FD 3 plus four nonblocking endpoint-proxy sockets;
 - it has no descriptor-number or device-path environment variables and never
   opens `/dev/ffs-*`;
-- `ep0` `ENABLE`, `DISABLE`, `UNBIND`, and `SETUP` events control runtime state;
+- supervisor `BIND`, `ENABLE`, `DISABLE`, `UNBIND`, `SUSPEND`, `RESUME`, and
+  control-request records drive runtime USB state;
 - I2C/SPI/GPIO access exists only through profile-approved pre-bind FDs; and
 - FunctionFS remains root-owned.
 
-## Incarnation recovery
+## USB reconfiguration and process recovery
 
 Send `SIGKILL` to the worker without stopping the supervisor. The same
 supervisor process must unbind, remove the old gadget and mount, start a fresh
 worker with fresh FDs, rebind, and return the UDC to `configured`.
 
-Exercise `usbReconnect()` and confirm it produces the same complete
-fresh-process cycle. Stopping the systemd service must instead perform final
-teardown without creating another incarnation.
+Exercise `usbReconnect()` and confirm the supervisor asks the existing worker
+to quiesce, replaces FunctionFS and the OUT/IN proxies, unbinds and rebinds the UDC, and re-enumerates
+without changing the worker PID. Separately kill the worker and confirm that
+process failure still causes a complete fresh-process cycle. Stopping the
+systemd service must perform final teardown without creating another worker.
+
+With the Pi independently powered, put the attached host to sleep and wake it.
+The worker PID and USB generation must survive. Accept either a direct
+`SUSPEND`/`RESUME` or a wake-time `SUSPEND`/`DISABLE`/`ENABLE`; confirm traffic
+continues afterward. If the host supplies the Pi's only power, first determine
+whether that machine and hub retain VBUS during sleep—VBUS loss cold-boots the
+Pi and cannot be handled as a USB event.
 
 ## Display and buttons
 
@@ -78,15 +91,12 @@ descriptor and confirm the WebUSB 1.0 platform capability uses vendor request
 code `0x01` and advertises no landing page. Windows may cache an earlier
 driverless result under the VID/PID/device-release tuple and will not repeat a
 failed Microsoft OS descriptor probe. The WinUSB-capable profiles therefore
-report device release `1.01`, distinct from the earlier `1.00` descriptor set.
-Increment `bcd_device` again whenever Microsoft OS descriptors change in a way
-that requires Windows to enumerate them anew. Automatic WinUSB binding without
-a custom INF was validated with release `1.01` on 2026-08-22.
+preserve the firmware's device release `1.00`; clear any stale host-side device
+instance when validating the newly discovered descriptor set. USB metadata is
+not overridden by the profile or virtual controller.
 
 ## Known limitations
 
-- Only the main vendor interface is exposed; the separate U2F HID interface is
-  not present.
 - Emulator file storage and development randomness remain software resources.
 - The appliance does not provide physical Trezor security or firmware
   authenticity.
