@@ -89,15 +89,15 @@ FunctionFS data handles drive the same virtual controller. Emulator flash,
 timer, and randomness remain in place; the UDP abstraction and desktop SDL do
 not.
 
-One worker-owned reader thread serves each blocking FunctionFS OUT endpoint.
-It publishes one completed transfer through a single shared handoff slot and
-wakes the firmware loop with `eventfd`; it never calls firmware code. A second
-completion before the firmware consumes the first is rejected as an invariant
-failure instead of being buffered by the USB adapter. FunctionFS IN endpoints
-have no helper: firmware writes them directly and blocks in the kernel until
-the host accepts the transfer. There is no socket, queue, header,
-acknowledgement, or additional USB framing. Higher-level Trezor message
-assembly remains entirely in the genuine firmware.
+One worker-owned helper thread serves each blocking FunctionFS endpoint; none
+calls firmware code. An OUT helper publishes one completed transfer through a
+single controller handoff slot and wakes Core with `eventfd`. An IN helper
+drains one controller submission slot into FunctionFS and signals write
+readiness again only after the host accepts it. Consequently a firmware write
+returns when the virtual controller accepts the report, as on hardware,
+instead of freezing Core until the host reads it. There is no socket, stream
+framing, acknowledgement, or higher-level buffering. Trezor message assembly
+and USB backpressure remain in the genuine firmware and controller facade.
 
 The supervisor control socket carries named hardware resources once, complete
 USB configurations from worker to supervisor, quiesce/serving lifecycle
