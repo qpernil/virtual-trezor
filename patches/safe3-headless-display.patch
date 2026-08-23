@@ -2,16 +2,20 @@ diff --git a/core/SConscript.unix b/core/SConscript.unix
 index 3674d5f33f..0dcc5d1b3c 100644
 --- a/core/SConscript.unix
 +++ b/core/SConscript.unix
-@@ -19,6 +19,7 @@ RASPI = os.getenv('TREZOR_EMULATOR_RASPI') == '1'
+@@ -19,6 +19,8 @@ RASPI = os.getenv('TREZOR_EMULATOR_RASPI') == '1'
  MICROPY_ENABLE_SOURCE_LINE = ARGUMENTS.get('MICROPY_ENABLE_SOURCE_LINE', '1')
  DBG_CONSOLE = ARGUMENTS.get('DBG_CONSOLE', '')
  EXTAPP_SUPPORT = ARGUMENTS.get('EXTAPP_SUPPORT', '0') == '1'
 +HEADLESS_DISPLAY = os.getenv('VIRTUAL_TREZOR_HEADLESS_DISPLAY') == '1'
++SUPERVISOR_USB = os.getenv('VIRTUAL_TREZOR_SUPERVISOR_USB') == '1'
  
  
  if BENCHMARK and PYOPT != '0':
-@@ -460,6 +461,30 @@ env = Environment(
+@@ -460,6 +462,39 @@ env = Environment(
  
++if SUPERVISOR_USB:
++    FEATURES_WANTED = [feature for feature in FEATURES_WANTED if feature != 'usb_iface_debug']
++
  FEATURES_AVAILABLE = models.configure_board(TREZOR_MODEL, HW_REVISION, FEATURES_WANTED, env, CPPDEFINES_HAL, SOURCE_UNIX, PATH_HAL)
  
 +if HEADLESS_DISPLAY:
@@ -19,14 +23,17 @@ index 3674d5f33f..0dcc5d1b3c 100644
 +    display_resources_source = os.environ['VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE']
 +    button_source = os.environ['VIRTUAL_TREZOR_BUTTON_SOURCE']
 +    button_resources_source = os.environ.get('VIRTUAL_TREZOR_BUTTON_RESOURCES_SOURCE')
++    usb_source = os.environ.get('VIRTUAL_TREZOR_USB_SOURCE')
 +    replacements = {
 +        'embed/io/display/unix/display_driver.c': display_source,
 +        'embed/io/button/unix/button.c': button_source,
++        'embed/io/usb/unix/usb.c': usb_source or 'embed/io/usb/unix/usb.c',
 +    }
 +    SOURCE_UNIX = [
 +        replacements.get(source, source)
 +        for source in SOURCE_UNIX
 +        if source != 'embed/sys/task/unix/sdl_event.c'
++        and not (SUPERVISOR_USB and source == 'embed/io/usb/unix/sock.c')
 +    ]
 +    SOURCE_UNIX += [display_resources_source]
 +    if button_resources_source:
@@ -37,11 +44,14 @@ index 3674d5f33f..0dcc5d1b3c 100644
 +        'embed/io/button',
 +    ]
 +    CPPDEFINES_MOD += ['VIRTUAL_TREZOR_HEADLESS_DISPLAY']
++    if SUPERVISOR_USB:
++        CPPDEFINES_MOD += ['VIRTUAL_TREZOR_SUPERVISOR_USB']
++        CPPPATH_MOD += [os.environ['VIRTUAL_TREZOR_SUPERVISOR_INCLUDE']]
 +
  env.Tool('micropython')
  
  env.Replace(
-@@ -544,10 +568,20 @@ try:
+@@ -544,10 +579,26 @@ try:
  except OSError:
      print("libjpeg not installed, Emulator build is not possible")
  
@@ -58,6 +68,12 @@ index 3674d5f33f..0dcc5d1b3c 100644
 +            '-pthread',
 +            '-ldl',
 +        ])
++    if SUPERVISOR_USB:
++        env.Append(
++            LINKFLAGS=[
++                '-L' + os.path.dirname(os.environ['VIRTUAL_TREZOR_WORKER_LIBRARY']),
++                '-lusb_gadget_worker',
++            ])
 +else:
 +    try:
 +        env.ParseConfig('pkg-config --cflags --libs sdl2 SDL2_image')

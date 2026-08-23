@@ -10,6 +10,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
+#include "supervisor_resources.h"
+#endif
+
 #ifdef __linux__
 #include <linux/gpio.h>
 #include <sys/ioctl.h>
@@ -67,6 +71,12 @@ bool safe3_display_resources_acquire(safe3_display_resources_t *resources) {
   memset(resources, 0, sizeof(*resources));
   resources->bus_fd = -1;
   resources->control_fd = -1;
+
+#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
+  resources->bus_fd = safe3_supervisor_display_bus_fd();
+  resources->control_fd = safe3_supervisor_display_control_fd();
+  return resources->bus_fd >= 0 && resources->control_fd >= 0;
+#endif
 
   const char *bus_fd_value = getenv("VIRTUAL_TREZOR_DISPLAY_BUS_FD");
   const char *control_fd_value = getenv("VIRTUAL_TREZOR_DISPLAY_CONTROL_FD");

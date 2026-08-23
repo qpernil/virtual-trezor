@@ -5,7 +5,7 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 
 .PHONY: all check check-platform check-upstream check-worker-boundary init \
 	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
-	worker
+	safe3-usb worker
 
 all: check
 
@@ -151,6 +151,9 @@ safe3-display: check-upstream
 
 safe3-input: check-upstream
 	$(MAKE) -f mk/safe3-worker.mk input
+
+safe3-usb: check-upstream
+	$(MAKE) -f mk/safe3-worker.mk usb
 
 worker: check
 	./scripts/build-pi-worker.sh
