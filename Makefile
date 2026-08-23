@@ -39,6 +39,14 @@ check-worker-boundary:
 	@grep -q 'write(endpoint->functionfs_fd' \
 		platform/raspberry-pi/usb_functionfs.c
 	@grep -q 'timer_linux.c' scripts/build-pi-worker.sh
+	@grep -q 'filter-out ../vendor/trezor-crypto/rand_insecure.o' \
+		mk/worker-firmware.mk
+	@grep -q 'fopen("/dev/urandom", "rb")' \
+		platform/raspberry-pi/random_linux.c
+	@grep -Fq 'emulator = ["models/emulator"]' \
+		patches/safe3-secure-random.patch
+	@grep -q 'void random_buffer(uint8_t\* buffer' \
+		patches/safe3-secure-random.patch
 	@grep -q 'display_backends_create' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO8' platform/safe3/display_core.c
@@ -74,6 +82,11 @@ check-platform:
 		tests/test_platform_timer.c \
 		-o build/tests/test_platform_timer
 	@build/tests/test_platform_timer
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		platform/raspberry-pi/random_linux.c \
+		tests/test_platform_random.c \
+		-o build/tests/test_platform_random
+	@build/tests/test_platform_random
 	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
 		-I$(USB_GADGET_SUPERVISOR_DIR)/worker \
 		tests/test_worker_protocol.c \

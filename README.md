@@ -79,7 +79,8 @@ The current worker keeps upstream UI composition and host support while
 replacing the Raspberry Pi hardware boundary:
 
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
-  the generic OLED framebuffer, file-backed flash, timer, and randomness;
+  the generic OLED framebuffer, and file-backed flash; retain the firmware RNG
+  API while sourcing its entropy from the Linux kernel;
 - exclude both UDP source files and the upstream SDL display/button objects;
 - supply a virtual `libopencm3` USB controller, direct FunctionFS endpoints,
   the supervisor control channel, Linux display, and inherited GPIO-line button
@@ -261,8 +262,8 @@ controller selection and the event-driven timing stage remain deferred.
 ## Safety and identity
 
 Never use this software to protect real funds, recovery seeds, passphrases, or
-other valuable secrets. Emulator randomness and file-backed storage are not
-hardware security.
+other valuable secrets. Linux kernel entropy and file-backed storage do not
+provide the physical isolation or hardware security of a genuine Trezor.
 
 The USB VID/PID and descriptor strings come from the upstream firmware for
 controlled, local compatibility testing; they do not distinguish this worker
