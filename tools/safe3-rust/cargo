@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SAFE3_RUSTFLAGS="${RUSTFLAGS:-} -Z crate-attr=feature(custom_test_frameworks)"
-
-exec env RUSTC_BOOTSTRAP=1 RUSTFLAGS="$SAFE3_RUSTFLAGS" \
-  rustup run stable cargo "$@"
+exec env RUSTC_BOOTSTRAP=1 rustup run stable cargo "$@"

@@ -49,9 +49,6 @@ usb:
 	@test -x "$(SAFE3_USB)"
 
 clean:
-	@if [[ -L "$(PROJECT_ROOT)/upstream/trezor-firmware/core/build/unix" ]]; then \
-		rm "$(PROJECT_ROOT)/upstream/trezor-firmware/core/build/unix"; \
-	fi
 	rm -rf "$(SAFE3_BUILD_DIR)"
 	rm -rf "$(SAFE3_DISPLAY_BUILD_DIR)"
 	rm -rf "$(SAFE3_INPUT_BUILD_DIR)"

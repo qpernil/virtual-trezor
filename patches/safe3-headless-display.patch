@@ -1,118 +1,196 @@
-diff --git a/core/SConscript.unix b/core/SConscript.unix
-index 3674d5f33f..0dcc5d1b3c 100644
---- a/core/SConscript.unix
-+++ b/core/SConscript.unix
-@@ -19,6 +19,8 @@ RASPI = os.getenv('TREZOR_EMULATOR_RASPI') == '1'
- MICROPY_ENABLE_SOURCE_LINE = ARGUMENTS.get('MICROPY_ENABLE_SOURCE_LINE', '1')
- DBG_CONSOLE = ARGUMENTS.get('DBG_CONSOLE', '')
- EXTAPP_SUPPORT = ARGUMENTS.get('EXTAPP_SUPPORT', '0') == '1'
-+HEADLESS_DISPLAY = os.getenv('VIRTUAL_TREZOR_HEADLESS_DISPLAY') == '1'
-+SUPERVISOR_USB = os.getenv('VIRTUAL_TREZOR_SUPERVISOR_USB') == '1'
+diff --git a/core/embed/io/button/build.rs b/core/embed/io/button/build.rs
+index d59cdf35b0..5b83bb48a4 100644
+--- a/core/embed/io/button/build.rs
++++ b/core/embed/io/button/build.rs
+@@ -1,5 +1,10 @@
+ use xbuild::{CLibrary, Result, bail_unsupported};
  
- 
- if BENCHMARK and PYOPT != '0':
-@@ -460,6 +462,39 @@ env = Environment(
- 
-+if SUPERVISOR_USB:
-+    FEATURES_WANTED = [feature for feature in FEATURES_WANTED if feature != 'usb_iface_debug']
++fn virtual_trezor_source(name: &str) -> String {
++    println!("cargo:rerun-if-env-changed={name}");
++    std::env::var(name).unwrap_or_else(|_| panic!("missing {name}"))
++}
 +
- FEATURES_AVAILABLE = models.configure_board(TREZOR_MODEL, HW_REVISION, FEATURES_WANTED, env, CPPDEFINES_HAL, SOURCE_UNIX, PATH_HAL)
+ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     lib.add_include("button/inc");
  
-+if HEADLESS_DISPLAY:
-+    display_source = os.environ['VIRTUAL_TREZOR_DISPLAY_SOURCE']
-+    display_resources_source = os.environ['VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE']
-+    button_source = os.environ['VIRTUAL_TREZOR_BUTTON_SOURCE']
-+    button_resources_source = os.environ.get('VIRTUAL_TREZOR_BUTTON_RESOURCES_SOURCE')
-+    usb_source = os.environ.get('VIRTUAL_TREZOR_USB_SOURCE')
-+    replacements = {
-+        'embed/io/display/unix/display_driver.c': display_source,
-+        'embed/io/button/unix/button.c': button_source,
-+        'embed/io/usb/unix/usb.c': usb_source or 'embed/io/usb/unix/usb.c',
+@@ -11,7 +16,16 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+         lib.add_source("button/button_debug.c");
+     }
+ 
+-    if cfg!(feature = "emulator") {
++    if cfg!(feature = "emulator") && std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_some() {
++        lib.add_include("button");
++        lib.add_source(virtual_trezor_source("VIRTUAL_TREZOR_BUTTON_SOURCE"));
++        if let Ok(resources) = std::env::var("VIRTUAL_TREZOR_BUTTON_RESOURCES_SOURCE")
++            && !resources.is_empty()
++        {
++            println!("cargo:rerun-if-env-changed=VIRTUAL_TREZOR_BUTTON_RESOURCES_SOURCE");
++            lib.add_source(resources);
++        }
++    } else if cfg!(feature = "emulator") {
+         lib.add_source("button/unix/button.c");
+     } else if cfg!(feature = "mcu_stm32") {
+         lib.add_source("button/stm32/button.c");
+diff --git a/core/embed/io/display/build.rs b/core/embed/io/display/build.rs
+index 1a1911e198..36b25c0573 100644
+--- a/core/embed/io/display/build.rs
++++ b/core/embed/io/display/build.rs
+@@ -1,5 +1,14 @@
+ use xbuild::{CLibrary, Result, bail_unsupported};
+ 
++fn virtual_trezor_headless() -> bool {
++    std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_some()
++}
++
++fn virtual_trezor_source(name: &str) -> String {
++    println!("cargo:rerun-if-env-changed={name}");
++    std::env::var(name).unwrap_or_else(|_| panic!("missing {name}"))
++}
++
+ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     lib.add_include("display/inc");
+ 
+@@ -19,7 +28,9 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+         lib.add_define("FRAMEBUFFER", Some("1"));
+     }
+ 
+-    if cfg!(feature = "emulator") {
++    if cfg!(feature = "emulator") && virtual_trezor_headless() {
++        add_driver_virtual_trezor(lib)?;
++    } else if cfg!(feature = "emulator") {
+         // The emulator reuses the emulated board's display configuration (panel,
+         // framebuffer) but always builds the unix driver instead of the HW one.
+         add_driver_unix(lib)?;
+@@ -38,6 +49,22 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     Ok(())
+ }
+ 
++fn add_driver_virtual_trezor(lib: &mut CLibrary) -> Result<()> {
++    if cfg!(feature = "display_panel_vg2864") {
++        set_panel_vg2864(lib);
++    } else {
++        bail_unsupported!();
 +    }
-+    SOURCE_UNIX = [
-+        replacements.get(source, source)
-+        for source in SOURCE_UNIX
-+        if source != 'embed/sys/task/unix/sdl_event.c'
-+        and not (SUPERVISOR_USB and source == 'embed/io/usb/unix/sock.c')
-+    ]
-+    SOURCE_UNIX += [display_resources_source]
-+    if button_resources_source:
-+        SOURCE_UNIX += [button_resources_source]
-+    CPPPATH_MOD += [
-+        os.path.dirname(display_source),
-+        os.environ['VIRTUAL_TREZOR_DISPLAY_INCLUDE'],
-+        'embed/io/button',
-+    ]
-+    CPPDEFINES_MOD += ['VIRTUAL_TREZOR_HEADLESS_DISPLAY']
-+    if SUPERVISOR_USB:
-+        CPPDEFINES_MOD += ['VIRTUAL_TREZOR_SUPERVISOR_USB']
-+        CPPPATH_MOD += [os.environ['VIRTUAL_TREZOR_SUPERVISOR_INCLUDE']]
 +
- env.Tool('micropython')
++    lib.add_define("VIRTUAL_TREZOR_HEADLESS_DISPLAY", Some("1"));
++    lib.add_include(virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_INCLUDE"));
++    lib.add_sources([
++        virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_SOURCE"),
++        virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE"),
++    ]);
++    Ok(())
++}
++
+ // --------------------------------------------------------------------------
+ // Panel functions: defines only, no sources, no driver knowledge
+ // --------------------------------------------------------------------------
+diff --git a/core/embed/io/usb/build.rs b/core/embed/io/usb/build.rs
+index ee83f8846e..cb586216c5 100644
+--- a/core/embed/io/usb/build.rs
++++ b/core/embed/io/usb/build.rs
+@@ -1,5 +1,10 @@
+ use xbuild::{CLibrary, Result, bail_unsupported};
  
- env.Replace(
-@@ -544,10 +579,26 @@ try:
- except OSError:
-     print("libjpeg not installed, Emulator build is not possible")
++fn virtual_trezor_source(name: &str) -> String {
++    println!("cargo:rerun-if-env-changed={name}");
++    std::env::var(name).unwrap_or_else(|_| panic!("missing {name}"))
++}
++
+ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     lib.add_include("usb/inc");
  
--try:
--    env.ParseConfig('pkg-config --cflags --libs sdl2 SDL2_image')
--except OSError:
--    print("SDL2 not installed, Emulator build is not possible")
-+if HEADLESS_DISPLAY:
-+    env.Append(
-+        LINKFLAGS=[
-+            '-L' + os.path.dirname(os.environ['VIRTUAL_TREZOR_DISPLAY_LIBRARY']),
-+            '-ldisplay_backends',
-+            "-Wl,-rpath,'$$ORIGIN'",
-+            '-pthread',
-+            '-ldl',
-+        ])
-+    if SUPERVISOR_USB:
-+        env.Append(
-+            LINKFLAGS=[
-+                '-L' + os.path.dirname(os.environ['VIRTUAL_TREZOR_WORKER_LIBRARY']),
-+                '-lusb_gadget_worker',
-+            ])
-+else:
-+    try:
-+        env.ParseConfig('pkg-config --cflags --libs sdl2 SDL2_image')
-+    except OSError:
-+        print("SDL2 not installed, Emulator build is not possible")
+@@ -22,7 +27,14 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+         lib.add_define("USE_USB_IFACE_VCP", Some("1"));
+     }
  
- BYTECODE_OPTIMIZATION = {'0': '0', '1': '3'}[PYOPT]
+-    if cfg!(feature = "emulator") {
++    if cfg!(feature = "emulator") && std::env::var_os("VIRTUAL_TREZOR_SUPERVISOR_USB").is_some() {
++        lib.add_define("VIRTUAL_TREZOR_SUPERVISOR_USB", Some("1"));
++        lib.add_include(virtual_trezor_source("VIRTUAL_TREZOR_SUPERVISOR_INCLUDE"));
++        lib.add_sources([
++            virtual_trezor_source("VIRTUAL_TREZOR_USB_SOURCE"),
++            "usb/usb_config.c".to_string(),
++        ]);
++    } else if cfg!(feature = "emulator") {
+         lib.add_sources(["usb/unix/sock.c", "usb/unix/usb.c", "usb/usb_config.c"]);
+     } else if cfg!(feature = "mcu_stm32") {
+         lib.add_sources([
+diff --git a/core/embed/projects/unix/build.rs b/core/embed/projects/unix/build.rs
+index 64590def26..e07581e4de 100644
+--- a/core/embed/projects/unix/build.rs
++++ b/core/embed/projects/unix/build.rs
+@@ -1,5 +1,17 @@
+ use xbuild::Result;
  
++fn link_virtual_trezor_library(variable: &str, name: &str) {
++    use std::path::Path;
++
++    println!("cargo:rerun-if-env-changed={variable}");
++    let library = std::env::var(variable).unwrap_or_else(|_| panic!("missing {variable}"));
++    let directory = Path::new(&library)
++        .parent()
++        .unwrap_or_else(|| panic!("{variable} has no parent directory"));
++    println!("cargo:rustc-link-search=native={}", directory.display());
++    println!("cargo:rustc-link-lib=dylib={name}");
++}
++
+ fn main() -> Result<()> {
+     xbuild::build_and_link("firmware", |lib| {
+         lib.import_lib("io")?;
+@@ -15,6 +27,19 @@ fn main() -> Result<()> {
+             lib.add_source("../../api/trezor_api_v1_impl.c");
+         }
+ 
++        if std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_some() {
++            lib.add_define("VIRTUAL_TREZOR_HEADLESS_DISPLAY", Some("1"));
++        }
++
+         Ok(())
+-    })
++    })?;
++
++    if std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_some() {
++        link_virtual_trezor_library("VIRTUAL_TREZOR_DISPLAY_LIBRARY", "display_backends");
++        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
++    }
++    if std::env::var_os("VIRTUAL_TREZOR_SUPERVISOR_USB").is_some() {
++        link_virtual_trezor_library("VIRTUAL_TREZOR_WORKER_LIBRARY", "usb_gadget_worker");
++    }
++    Ok(())
+ }
 diff --git a/core/embed/projects/unix/main_main.c b/core/embed/projects/unix/main_main.c
-index 6901931314..c0829a21a2 100644
+index 7b766d9ffd..51cb5ff247 100644
 --- a/core/embed/projects/unix/main_main.c
 +++ b/core/embed/projects/unix/main_main.c
-@@ -58,7 +58,9 @@
- #include "zkp_context.h"
+@@ -77,9 +77,11 @@
+ #include <sec/mcu_attestation.h>
  #endif
  
 +#ifndef VIRTUAL_TREZOR_HEADLESS_DISPLAY
- #include <SDL.h>
+ #include <SDL3/SDL.h>
 +#endif
  
- #ifdef USE_TROPIC
- static uint16_t get_tropic_model_port(void) {
-@@ -110,6 +112,7 @@ static void drivers_init(void) {
+ #include "version.h"
+ 
+ static void drivers_deinit(void) { flash_deinit(); }
+ 
+@@ -123,6 +125,7 @@ static void drivers_init(void) {
  #endif
  }
  
 +#ifndef VIRTUAL_TREZOR_HEADLESS_DISPLAY
- // Throws MicroPython SystemExit exception in the context of the given task
- static void throw_exit_exception(systask_t *task, int code) {
-   extern void coreapp_throw_exit_exception(int code);
-@@ -143,6 +146,7 @@ static int sdl_event_filter(void *userdata, SDL_Event *event) {
+ static uintptr_t throw_exit_exception_trampoline(uintptr_t code,
+                                                  uintptr_t unused1,
+                                                  uintptr_t unused2) {
+@@ -169,6 +172,7 @@ static bool sdl_event_filter(void *userdata, SDL_Event *event) {
    }
-   return 1;
+   return true;
  }
 +#endif
  
- // Kernel task main loop
- //
-@@ -177,8 +181,10 @@ int main(int argc, char **argv) {
+ // Can be used to get basic emulator properties before regularly starting it.
+ // Needs to be called before it starts listening on UDP sockets in case there
+@@ -218,8 +222,10 @@ int main(int argc, char **argv) {
      error_shutdown("Cannot start coreapp");
    }
  
@@ -123,8 +201,45 @@ index 6901931314..c0829a21a2 100644
  
    // Run the coreapp task
    applet_run(&coreapp);
+diff --git a/core/embed/sys/bsp/build.rs b/core/embed/sys/bsp/build.rs
+index 81bdea2015..3313aed141 100644
+--- a/core/embed/sys/bsp/build.rs
++++ b/core/embed/sys/bsp/build.rs
+@@ -148,8 +148,10 @@ fn add_stm32f4_bsp(lib: &mut CLibrary) -> Result<()> {
+ fn add_emulator_bsp(lib: &mut xbuild::CLibrary) -> Result<()> {
+     lib.add_source("bsp/unix/profile.c");
+ 
+-    lib.import_external_lib("sdl3", true)?;
+-    lib.import_external_lib("sdl3-image", true)?;
++    if std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_none() {
++        lib.import_external_lib("sdl3", true)?;
++        lib.import_external_lib("sdl3-image", true)?;
++    }
+ 
+     Ok(())
+ }
+diff --git a/core/embed/sys/task/build.rs b/core/embed/sys/task/build.rs
+index 41d43a6467..fbb80017e3 100644
+--- a/core/embed/sys/task/build.rs
++++ b/core/embed/sys/task/build.rs
+@@ -17,10 +17,14 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     if cfg!(feature = "emulator") {
+         lib.add_sources([
+             "task/unix/coreapp.c",
+-            "task/unix/sdl_event.c",
+             "task/unix/systask.c",
+             "task/unix/system.c",
+         ]);
++        if std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_none() {
++            lib.add_source("task/unix/sdl_event.c");
++        } else {
++            lib.add_define("VIRTUAL_TREZOR_HEADLESS_DISPLAY", Some("1"));
++        }
+     } else if cfg!(feature = "mcu_stm32") {
+         lib.add_sources([
+             "task/stm32/coreapp.c",
 diff --git a/core/embed/sys/task/sysevent.c b/core/embed/sys/task/sysevent.c
-index a0431527de..1f3ce36aa1 100644
+index ec28c62dbb..7b81d4236f 100644
 --- a/core/embed/sys/task/sysevent.c
 +++ b/core/embed/sys/task/sysevent.c
 @@ -33,7 +33,7 @@

@@ -158,9 +158,10 @@ repository is a Git submodule at `upstream/trezor-firmware`, pinned to:
 
 | Item | Value |
 | --- | --- |
-| Release | `legacy/v1.14.1` |
-| Commit | `725c0c01879329900f08fc453d8fd0fcb4d86090` |
-| Model | Trezor One / `T1B1` |
+| Core release | `core/v2.12.4` |
+| Legacy release level | `1.14.1` |
+| Commit | `30be4e8c9488eeab68f994af23b3d9c9b7334266` |
+| Models | Trezor One / `T1B1`; Safe 3 rev B / `T3B1` |
 
 Initialize the submodule and only the dependencies needed by the Trezor One
 worker and its pinned Python tool environment:
@@ -224,9 +225,26 @@ press to both buttons. The result is
 `VIRTUAL_TREZOR_BUTTON_TRACE=1` only when diagnosing transitions. The normal
 driver is silent.
 
-See the Safe 3 plan for Ubuntu prerequisites and the next supervisor USB,
-lifecycle, and timing stages. Additional display-controller selection is
-deferred.
+The third cumulative target replaces Core's Unix UDP transport with the
+supervisor personality and endpoint protocol:
+
+```sh
+make safe3-usb
+```
+
+Core's `usb_init`, `usb_webusb_add`, and `usb_hid_add` calls populate the
+shared Rust `UsbPersonalityBuilder`; `usb_start` finishes and publishes the
+same typed personality used by legacy firmware discovery. The resulting
+`build/safe3-t3b1-usb/virtual-trezor-safe3-usb` is accompanied by
+`libdisplay_backends.so` and `libusb_gadget_worker.so`. The checked-in
+`profiles/virtual-trezor-safe3.toml` keeps Safe 3 state and FunctionFS mounts
+separate from Trezor One. Holding display-HAT KEY3 publishes an empty USB
+personality, so the powered worker remains absent from USB until release;
+release republishes the genuine Core personality immediately. Core first sends
+an empty configuration as its readiness declaration, so an interactive boot or
+unlock screen can keep USB absent indefinitely without holding the supervisor
+startup path or restarting a healthy firmware worker. Additional display-
+controller selection and the event-driven timing stage remain deferred.
 
 ## Documentation
 

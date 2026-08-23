@@ -6,8 +6,7 @@ UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 CORE_DIR="$UPSTREAM_DIR/core"
 DISPLAY_BACKENDS_DIR="${DISPLAY_BACKENDS_DIR:-$PROJECT_ROOT/../display-backends}"
 DISPLAY_BUILD_DIR="${SAFE3_DISPLAY_BUILD_DIR:-$PROJECT_ROOT/build/safe3-t3b1-display}"
-DISPLAY_UNIX_DIR="$DISPLAY_BUILD_DIR/unix"
-CORE_UNIX_LINK="$CORE_DIR/build/unix"
+DISPLAY_CARGO_TARGET="$DISPLAY_BUILD_DIR/cargo-target"
 OVERLAY_PATCH="$PROJECT_ROOT/patches/safe3-headless-display.patch"
 DISPLAY_LIBRARY="$DISPLAY_BACKENDS_DIR/target/release/libdisplay_backends.so"
 BUTTON_SOURCE="${SAFE3_BUTTON_SOURCE:-$PROJECT_ROOT/platform/safe3/button_headless.c}"
@@ -47,15 +46,7 @@ cargo build --manifest-path "$DISPLAY_BACKENDS_DIR/Cargo.toml" \
   --release --locked
 test -f "$DISPLAY_LIBRARY"
 
-mkdir -p "$DISPLAY_BUILD_DIR" "$CORE_DIR/build"
-if [[ -L "$CORE_UNIX_LINK" ]]; then
-  rm "$CORE_UNIX_LINK"
-elif [[ -e "$CORE_UNIX_LINK" ]]; then
-  echo "Core Unix build path is not a managed symlink: $CORE_UNIX_LINK" >&2
-  exit 1
-fi
-mkdir -p "$DISPLAY_UNIX_DIR"
-ln -s "$DISPLAY_UNIX_DIR" "$CORE_UNIX_LINK"
+mkdir -p "$DISPLAY_BUILD_DIR" "$DISPLAY_CARGO_TARGET"
 
 git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH"
 git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH"
@@ -68,6 +59,8 @@ cleanup() {
 trap cleanup EXIT
 
 export PATH="$PROJECT_ROOT/tools/safe3-rust:$PROJECT_ROOT/tools:$UPSTREAM_DIR/.venv/bin:$PATH"
+export CARGO_TARGET_DIR="$DISPLAY_CARGO_TARGET"
+export CFLAGS="${CFLAGS:+$CFLAGS }-Wno-error=unterminated-string-initialization"
 export VIRTUAL_TREZOR_HEADLESS_DISPLAY=1
 export VIRTUAL_TREZOR_DISPLAY_SOURCE="$PROJECT_ROOT/platform/safe3/display_core.c"
 export VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE="$PROJECT_ROOT/platform/safe3/display_resources.c"
@@ -76,9 +69,13 @@ export VIRTUAL_TREZOR_BUTTON_RESOURCES_SOURCE="$BUTTON_RESOURCES_SOURCE"
 export VIRTUAL_TREZOR_DISPLAY_INCLUDE="$DISPLAY_BACKENDS_DIR/include"
 export VIRTUAL_TREZOR_DISPLAY_LIBRARY="$DISPLAY_LIBRARY"
 
-make -C "$CORE_DIR" TREZOR_MODEL=T3B1 PYOPT=0 build_unix
+(
+  cd "$CORE_DIR/embed"
+  cargo xtask build firmware --emulator --model T3B1 --pyopt false \
+    --disable-animation --debug-link false
+)
 
-CORE_OUTPUT="$DISPLAY_UNIX_DIR/trezor-emu-core"
+CORE_OUTPUT="$DISPLAY_CARGO_TARGET/artifacts/T3B1/firmware-emu"
 test -x "$CORE_OUTPUT"
 install -m 0755 "$CORE_OUTPUT" "$OUTPUT"
 install -m 0755 "$DISPLAY_LIBRARY" "$DISPLAY_BUILD_DIR/libdisplay_backends.so"
