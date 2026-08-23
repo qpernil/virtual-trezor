@@ -40,7 +40,7 @@ Inspect the running worker and confirm:
 
 - it runs as the configured non-root account;
 - it holds fixed control FD 3 plus four direction-specific FunctionFS data
-  endpoints, with one reader thread and one `eventfd` per OUT endpoint;
+  endpoints, with one helper thread and one `eventfd` per endpoint;
 - it has no descriptor-number or device-path environment variables and never
   opens `/dev/ffs-*`;
 - supervisor `BIND`, `ENABLE`, `DISABLE`, `UNBIND`, `SUSPEND`, `RESUME`, and

@@ -49,8 +49,10 @@ publishes schema-1 CBOR. Firmware descriptor discovery uses that same builder
 with raw control-transfer responses, so native construction and genuine EP0
 discovery converge on one validation and serialization path. The Safe 3
 worker keeps only endpoint runtime state in C. It receives direct FunctionFS
-endpoint capabilities, uses one blocking OUT helper per active interface to
-wake Core's pollable syshandles, and writes IN reports directly.
+endpoint capabilities and uses one blocking helper per endpoint direction.
+OUT completion wakes Core's pollable read handle; an IN helper drains a
+single controller submission slot so a stale host cannot block Core's entire
+firmware scheduler.
 
 The target produces
 `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` with co-located

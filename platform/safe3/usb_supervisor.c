@@ -98,6 +98,7 @@ typedef struct {
   int event_fd;
   pthread_t thread;
   pthread_mutex_t mutex;
+  pthread_cond_t produced;
   pthread_cond_t consumed;
   bool synchronization_initialized;
   bool thread_running;
@@ -425,55 +426,118 @@ static void *out_thread_main(void *context) {
   return NULL;
 }
 
-static void stop_endpoint_threads(void) {
-  for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
-    endpoint_t *endpoint = &g_usb.endpoints[number][0];
-    if (endpoint->thread_running) {
-      int result = pthread_cancel(endpoint->thread);
-      if (result == 0) {
-        result = pthread_join(endpoint->thread, NULL);
-      }
+static void *in_thread_main(void *context) {
+  endpoint_t *endpoint = context;
+  for (;;) {
+    size_t length;
+    int result = pthread_mutex_lock(&endpoint->mutex);
+    if (result != 0) {
+      errno = result;
+      die_errno("lock Safe 3 IN packet");
+    }
+    pthread_cleanup_push(unlock_endpoint_mutex, &endpoint->mutex);
+    while (!endpoint->occupied) {
+      result = pthread_cond_wait(&endpoint->produced, &endpoint->mutex);
       if (result != 0) {
         errno = result;
-        die_errno("stop Safe 3 OUT endpoint thread");
+        die_errno("wait for Safe 3 IN packet production");
       }
-      endpoint->thread_running = false;
     }
-    if (endpoint->event_fd >= 0) {
-      close(endpoint->event_fd);
-      endpoint->event_fd = -1;
+    length = endpoint->packet_length;
+    pthread_cleanup_pop(1);
+
+    const void *payload = length == 0 ? (const void *)"" : endpoint->packet;
+    ssize_t written;
+    do {
+      written = write(endpoint->fd, payload, length);
+    } while (written < 0 && errno == EINTR);
+    if (written < 0) {
+      if (generation_ended()) {
+        break;
+      }
+      die_errno("write FunctionFS IN endpoint");
     }
-    free(endpoint->packet);
-    free(endpoint->read_buffer);
-    endpoint->packet = NULL;
-    endpoint->read_buffer = NULL;
+    if ((size_t)written != length) {
+      die("short write to FunctionFS IN endpoint");
+    }
+
+    result = pthread_mutex_lock(&endpoint->mutex);
+    if (result != 0) {
+      errno = result;
+      die_errno("lock consumed Safe 3 IN packet");
+    }
     endpoint->packet_length = 0;
     endpoint->occupied = false;
+    pthread_cond_signal(&endpoint->consumed);
+    pthread_mutex_unlock(&endpoint->mutex);
+
+    uint64_t notification = 1;
+    if (write(endpoint->event_fd, &notification, sizeof(notification)) !=
+        (ssize_t)sizeof(notification)) {
+      die_errno("notify Safe 3 IN packet consumption");
+    }
+  }
+  return NULL;
+}
+
+static void stop_endpoint_threads(void) {
+  for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
+    for (size_t direction = 0; direction < 2; direction++) {
+      endpoint_t *endpoint = &g_usb.endpoints[number][direction];
+      if (endpoint->thread_running) {
+        int result = pthread_cancel(endpoint->thread);
+        if (result == 0) {
+          result = pthread_join(endpoint->thread, NULL);
+        }
+        if (result != 0) {
+          errno = result;
+          die_errno("stop Safe 3 endpoint thread");
+        }
+        endpoint->thread_running = false;
+      }
+      if (endpoint->event_fd >= 0) {
+        close(endpoint->event_fd);
+        endpoint->event_fd = -1;
+      }
+      free(endpoint->packet);
+      free(endpoint->read_buffer);
+      endpoint->packet = NULL;
+      endpoint->read_buffer = NULL;
+      endpoint->packet_length = 0;
+      endpoint->occupied = false;
+    }
   }
 }
 
 static void start_endpoint_threads(void) {
   for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
-    endpoint_t *endpoint = &g_usb.endpoints[number][0];
-    if (endpoint->fd < 0) {
-      continue;
+    for (size_t direction = 0; direction < 2; direction++) {
+      endpoint_t *endpoint = &g_usb.endpoints[number][direction];
+      if (endpoint->fd < 0) {
+        continue;
+      }
+      endpoint->packet = malloc(endpoint->max_packet_size);
+      if (direction == 0) {
+        endpoint->read_buffer = malloc(endpoint->max_packet_size);
+      }
+      if (endpoint->packet == NULL ||
+          (direction == 0 && endpoint->read_buffer == NULL)) {
+        die_errno("allocate Safe 3 endpoint buffers");
+      }
+      endpoint->event_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+      if (endpoint->event_fd < 0) {
+        die_errno("create Safe 3 endpoint notification");
+      }
+      void *(*thread_main)(void *) =
+          direction == 0 ? out_thread_main : in_thread_main;
+      int result =
+          pthread_create(&endpoint->thread, NULL, thread_main, endpoint);
+      if (result != 0) {
+        errno = result;
+        die_errno("start Safe 3 endpoint thread");
+      }
+      endpoint->thread_running = true;
     }
-    endpoint->packet = malloc(endpoint->max_packet_size);
-    endpoint->read_buffer = malloc(endpoint->max_packet_size);
-    if (endpoint->packet == NULL || endpoint->read_buffer == NULL) {
-      die_errno("allocate Safe 3 OUT endpoint buffers");
-    }
-    endpoint->event_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-    if (endpoint->event_fd < 0) {
-      die_errno("create Safe 3 OUT endpoint notification");
-    }
-    int result = pthread_create(&endpoint->thread, NULL, out_thread_main,
-                                endpoint);
-    if (result != 0) {
-      errno = result;
-      die_errno("start Safe 3 OUT endpoint thread");
-    }
-    endpoint->thread_running = true;
   }
 }
 
@@ -813,8 +877,8 @@ static void handle_runtime_record(struct worker_record *record) {
 }
 
 static void service_controller(void) {
-  struct pollfd fds[2 + MAX_ENDPOINT_NUMBER];
-  endpoint_t *ready_endpoints[MAX_ENDPOINT_NUMBER];
+  struct pollfd fds[2 + MAX_ENDPOINT_NUMBER * 2];
+  endpoint_t *ready_endpoints[MAX_ENDPOINT_NUMBER * 2];
   size_t count = 0;
   fds[count++] = (struct pollfd){.fd = CONTROL_FD,
                                  .events = POLLIN | POLLHUP | POLLERR};
@@ -825,11 +889,13 @@ static void service_controller(void) {
   size_t ready_count = 0;
   if (g_usb.enabled) {
     for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
-      endpoint_t *endpoint = &g_usb.endpoints[number][0];
-      if (endpoint->event_fd >= 0) {
-        ready_endpoints[ready_count++] = endpoint;
-        fds[count++] = (struct pollfd){.fd = endpoint->event_fd,
-                                       .events = POLLIN};
+      for (size_t direction = 0; direction < 2; direction++) {
+        endpoint_t *endpoint = &g_usb.endpoints[number][direction];
+        if (endpoint->event_fd >= 0) {
+          ready_endpoints[ready_count++] = endpoint;
+          fds[count++] = (struct pollfd){.fd = endpoint->event_fd,
+                                         .events = POLLIN};
+        }
       }
     }
   }
@@ -871,12 +937,16 @@ static void service_controller(void) {
       uint64_t notifications;
       if (read(ready_endpoints[i]->event_fd, &notifications,
                sizeof(notifications)) != (ssize_t)sizeof(notifications)) {
-        die_errno("read Safe 3 OUT notification");
+        die_errno("read Safe 3 endpoint notification");
       }
       interface_t *iface =
           interface_for_number((uint8_t)((ready_endpoints[i]->address & 0x7f) - 1));
       if (iface != NULL) {
-        syshandle_signal_read_ready(iface->handle, NULL);
+        if ((ready_endpoints[i]->address & 0x80) != 0) {
+          syshandle_signal_write_ready(iface->handle, NULL);
+        } else {
+          syshandle_signal_read_ready(iface->handle, NULL);
+        }
       }
     }
   }
@@ -912,10 +982,17 @@ static bool iface_read_ready(void *context, systask_id_t task_id,
 
 static bool iface_write_ready(void *context, systask_id_t task_id,
                               void *parameter) {
-  (void)context;
   (void)task_id;
   (void)parameter;
-  return g_usb.enabled && !g_usb.suspended;
+  interface_t *iface = context;
+  endpoint_t *endpoint = endpoint_for((uint8_t)(0x80 | (1 + iface->number)));
+  if (!g_usb.enabled || g_usb.suspended || endpoint == NULL) {
+    return false;
+  }
+  pthread_mutex_lock(&endpoint->mutex);
+  bool ready = !endpoint->occupied;
+  pthread_mutex_unlock(&endpoint->mutex);
+  return ready;
 }
 
 static void usb_event_poll(void *context, bool read_awaited,
@@ -972,16 +1049,19 @@ static ssize_t iface_write(void *context, const void *data, size_t length) {
       length > endpoint->max_packet_size) {
     return 0;
   }
-  const void *payload = length == 0 ? (const void *)"" : data;
-  ssize_t written;
-  do {
-    written = write(endpoint->fd, payload, length);
-  } while (written < 0 && errno == EINTR);
-  if (written < 0 && generation_ended()) {
-    g_usb.enabled = false;
+  pthread_mutex_lock(&endpoint->mutex);
+  if (endpoint->occupied) {
+    pthread_mutex_unlock(&endpoint->mutex);
     return 0;
   }
-  return written;
+  if (length != 0) {
+    memcpy(endpoint->packet, data, length);
+  }
+  endpoint->packet_length = (uint16_t)length;
+  endpoint->occupied = true;
+  pthread_cond_signal(&endpoint->produced);
+  pthread_mutex_unlock(&endpoint->mutex);
+  return (ssize_t)length;
 }
 
 static const syshandle_vmt_t usb_handle_vmt = {
@@ -1035,6 +1115,7 @@ secbool usb_init(const usb_dev_info_t *device) {
       endpoint->event_fd = -1;
       if (!endpoint->synchronization_initialized) {
         if (pthread_mutex_init(&endpoint->mutex, NULL) != 0 ||
+            pthread_cond_init(&endpoint->produced, NULL) != 0 ||
             pthread_cond_init(&endpoint->consumed, NULL) != 0) {
           die("initialize Safe 3 endpoint synchronization");
         }
