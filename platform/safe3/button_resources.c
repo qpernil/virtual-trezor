@@ -10,6 +10,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
+#include "supervisor_resources.h"
+#endif
+
 #ifdef __linux__
 #include <linux/gpio.h>
 #include <sys/ioctl.h>
@@ -65,6 +69,11 @@ static int request_button_lines(const char *path) {
 bool safe3_button_resources_acquire(safe3_button_resources_t *resources) {
   resources->lines_fd = -1;
   resources->owns_lines_fd = false;
+
+#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
+  resources->lines_fd = safe3_supervisor_button_lines_fd();
+  return resources->lines_fd >= 0;
+#endif
 
   const char *fd_value = getenv("VIRTUAL_TREZOR_BUTTONS_FD");
   if (fd_value != NULL) {
