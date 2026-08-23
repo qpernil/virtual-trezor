@@ -211,8 +211,22 @@ result is `build/safe3-t3b1-display/virtual-trezor-safe3-display`, accompanied
 by its shared `libdisplay_backends.so`. Run the unfrozen Core binary with
 `upstream/trezor-firmware/core/src` as its working directory.
 
-See the Safe 3 plan for Ubuntu prerequisites and the later GPIO, supervisor
-USB, lifecycle, and timing stages.
+The next cumulative target retains that display boundary and adds the Pi HAT's
+physical buttons through Core's genuine button poller:
+
+```sh
+make safe3-input
+```
+
+GPIO5 and GPIO26 map to Safe 3 left and right; GPIO13 maps the HAT's center
+press to both buttons. The result is
+`build/safe3-t3b1-input/virtual-trezor-safe3-input`. Set
+`VIRTUAL_TREZOR_BUTTON_TRACE=1` only when diagnosing transitions. The normal
+driver is silent.
+
+See the Safe 3 plan for Ubuntu prerequisites and the next supervisor USB,
+lifecycle, and timing stages. Additional display-controller selection is
+deferred.
 
 ## Documentation
 

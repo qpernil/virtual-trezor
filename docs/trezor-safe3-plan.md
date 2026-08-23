@@ -33,6 +33,14 @@ loop remain unchanged. The diagnostic target may open the Pi display resources
 directly, or accept already-open display descriptors through its environment;
 the final worker will receive named resources from the supervisor.
 
+The completed `make safe3-input` target preserves the display-only artifact
+and creates a separate cumulative build under `build/safe3-t3b1-input/`. It
+replaces the inert shim with a GPIO state provider while retaining Core's
+genuine `button_poll.c` state machines and press/release event generation.
+Physical Pi validation confirms independent left and right down/up transitions
+and the center-to-both mapping. This stage still leaves UDP USB, lifecycle, and
+timing unchanged.
+
 The pinned Core source uses nightly-only Rust language features. During initial
 development every project follows the current stable Rust toolchain; the Safe 3
 build invokes Cargo with an explicit `RUSTC_BOOTSTRAP=1` because the unchanged
@@ -157,15 +165,20 @@ backend sees it.
 ## Buttons
 
 Safe 3 uses two physical buttons, which is a direct fit for the current Pi
-hardware. The new platform driver will translate the inherited, pollable GPIO
-line events into Core button events while preserving the upstream button state
-machine, including press/release ordering and timing. The worker receives only
-the exact line-request handles prepared by the supervisor; it does not open a
-GPIO chip or acquire broader hardware access.
+hardware. The platform driver reports an active-low GPIO state bitmask to
+Core's existing poller, which preserves upstream per-task state and
+press/release event generation. GPIO5 is left, GPIO26 is right, and GPIO13
+maps the physical HAT's joystick press to both logical buttons. The diagnostic
+target requests those lines directly; it can instead accept the exact inherited
+line-request handle through `VIRTUAL_TREZOR_BUTTONS_FD`. The completed worker
+will receive that named resource from the supervisor and will not open the GPIO
+chip itself.
 
-The current HAT's optional center action may continue to map to both logical
-buttons if that behavior remains useful, but the two model buttons are the
-fidelity boundary.
+The line handle uses pull-ups, logical active-low values, and both-edge
+detection. During this polling stage only the current logical values are
+consumed. A later event-driven wait will also drain the same handle's edge
+events. `VIRTUAL_TREZOR_BUTTON_TRACE=1` enables transition logging for target
+diagnostics and is absent from normal operation.
 
 ## USB and supervisor integration
 
@@ -231,8 +244,9 @@ cryptography refactor before source lists or ownership are fixed.
 2. **Display boundary complete:** remove SDL and deliver the unchanged `Mono8`
    framebuffer through the shared adapter and `display-backends`. The button
    API is inert; USB, lifecycle, and timing retain their upstream behavior.
-3. **Input:** replace SDL buttons and exercise genuine Core press/release
-   interaction through the Pi GPIO resources.
+3. **Input complete:** preserve the display-only artifact, add a cumulative
+   GPIO target, and verify genuine Core left/right press and release states on
+   the Pi. Center maps to both logical buttons.
 4. **USB and lifecycle:** enumerate through the supervisor, handle protocol
    traffic and reconnects, and isolate state and resources from Trezor One.
 5. **Timing:** replace idle polling with the bounded event-driven wait and
@@ -263,6 +277,13 @@ cryptography refactor before source lists or ownership are fixed.
   revision and dependencies.
 
 ## Deferred work
+
+The current Safe 3 platform constructs the ST7789 backend directly. Selecting
+SSD1306, SH1106, or another compatible `display-backends` controller and
+acquiring its corresponding resource set is deliberately deferred until after
+supervisor USB integration. Core will continue to submit the same unchanged
+`Mono8` frame; controller-specific conversion remains exclusively a backend
+concern.
 
 Safe 5 (`T3T1`) is the most natural later touchscreen target because its
 240x240 RGB565 framebuffer matches the existing ST7789 panel. An optional SDL

@@ -4,7 +4,8 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 .DEFAULT_GOAL := check
 
 .PHONY: all check check-platform check-upstream check-worker-boundary init \
-	init-baseline safe3-baseline safe3-display upstream-baseline worker
+	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
+	worker
 
 all: check
 
@@ -44,8 +45,13 @@ check-worker-boundary:
 	@grep -q 'display_backends_write_frame' platform/safe3/display_core.c
 	@grep -q 'VIRTUAL_TREZOR_HEADLESS_DISPLAY' \
 		patches/safe3-headless-display.patch
-	@! grep -q '#include .*SDL' platform/safe3/button_headless.c \
-		platform/safe3/display_core.c platform/safe3/display_resources.c
+	@! grep -q '#include .*SDL' platform/safe3/button_gpio.c \
+		platform/safe3/button_headless.c \
+		platform/safe3/button_resources.c platform/safe3/display_core.c \
+		platform/safe3/display_resources.c
+	@grep -q 'button_gpio_pressed' platform/safe3/button_gpio.c
+	@grep -q 'GPIO_V2_LINE_GET_VALUES_IOCTL' \
+		platform/safe3/button_resources.c
 	@grep -q 'display_backends_write_frame' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_ST7789_SPI' platform/raspberry-pi/worker_config.h
 	@grep -q 'libdisplay_backends.a' mk/worker-firmware.mk
@@ -106,6 +112,28 @@ check-platform:
 		tests/test_safe3_display_resources.c \
 		-o build/tests/test_safe3_display_resources
 	@build/tests/test_safe3_display_resources
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic \
+		-D_POSIX_C_SOURCE=200809L -Iplatform/safe3 \
+		platform/safe3/button_resources.c \
+		tests/test_safe3_button_resources.c \
+		-o build/tests/test_safe3_button_resources
+	@build/tests/test_safe3_button_resources
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -c \
+		-DTREZOR_EMULATOR -DTREZOR_MODEL_T3B1 \
+		-D'MODEL_HEADER="T3B1/model_T3B1.h"' \
+		-D'VERSIONS_HEADER="T3B1/versions.h"' \
+		-D'TREZOR_BOARD="T3B1/boards/t3b1-unix.h"' \
+		-DKERNEL_MODE=1 -DSTM32U585xx -DMCU_TYPE=STM32U585xx \
+		-Iupstream/trezor-firmware/core \
+		-Iupstream/trezor-firmware/core/embed/rtl/inc \
+		-Iupstream/trezor-firmware/core/embed/models \
+		-Iupstream/trezor-firmware/core/embed/sys/bsp/inc \
+		-Iupstream/trezor-firmware/core/embed/sys/inc \
+		-Iupstream/trezor-firmware/core/embed/io/button \
+		-Iupstream/trezor-firmware/core/embed/io/button/inc \
+		-Iplatform/safe3 -Iplatform/raspberry-pi \
+		platform/safe3/button_gpio.c \
+		-o build/tests/safe3_button_gpio.o
 	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic -DEMULATOR=1 \
 		-Iupstream/trezor-firmware/legacy \
 		-Iplatform/raspberry-pi \
@@ -120,6 +148,9 @@ safe3-baseline: check-upstream
 
 safe3-display: check-upstream
 	$(MAKE) -f mk/safe3-worker.mk display
+
+safe3-input: check-upstream
+	$(MAKE) -f mk/safe3-worker.mk input
 
 worker: check
 	./scripts/build-pi-worker.sh

@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-/* Display-first build: keep Core's button API present without SDL. GPIO input
- * is deliberately introduced in the next isolated platform stage. */
+/* Display-only build: keep Core's button API present without SDL. */
 
 #include <trezor_bsp.h>
 
