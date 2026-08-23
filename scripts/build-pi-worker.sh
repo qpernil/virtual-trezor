@@ -16,7 +16,7 @@ fi
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
 
-for tool in make pkg-config uv ar cargo; do
+for tool in make pkg-config uv ar cargo nm strings; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required build tool: $tool" >&2
     exit 1
@@ -82,6 +82,14 @@ make -C "$LEGACY_DIR/firmware" \
 
 ARTIFACT="$LEGACY_DIR/firmware/virtual-trezor-worker.elf"
 test -x "$ARTIFACT"
+if nm "$ARTIFACT" | grep -E '[[:space:]](random_reseed|lcg_get_u32)$' >/dev/null; then
+  echo "Legacy worker unexpectedly contains the deterministic emulator PRNG" >&2
+  exit 1
+fi
+if ! strings "$ARTIFACT" | grep -F '/dev/urandom' >/dev/null; then
+  echo "Legacy worker does not contain the secure Unix RNG path" >&2
+  exit 1
+fi
 WORKER_PATH="$PROJECT_ROOT/build/virtual-trezor-worker"
 WORKER_STAGING="$(mktemp "$PROJECT_ROOT/build/.virtual-trezor-worker.XXXXXX")"
 trap 'rm -f "$WORKER_STAGING"' EXIT

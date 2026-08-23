@@ -117,6 +117,7 @@ not overridden by the profile or virtual controller.
 
 ## Known limitations
 
-- Emulator file storage and development randomness remain software resources.
+- File storage and Linux kernel entropy remain software resources without
+  genuine-device physical isolation.
 - The appliance does not provide physical Trezor security or firmware
   authenticity.

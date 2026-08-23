@@ -8,6 +8,7 @@ DISPLAY_BACKENDS_DIR="${DISPLAY_BACKENDS_DIR:-$PROJECT_ROOT/../display-backends}
 DISPLAY_BUILD_DIR="${SAFE3_DISPLAY_BUILD_DIR:-$PROJECT_ROOT/build/safe3-t3b1-display}"
 DISPLAY_CARGO_TARGET="$DISPLAY_BUILD_DIR/cargo-target"
 OVERLAY_PATCH="$PROJECT_ROOT/patches/safe3-headless-display.patch"
+RANDOM_PATCH="$PROJECT_ROOT/patches/safe3-secure-random.patch"
 DISPLAY_LIBRARY="$DISPLAY_BACKENDS_DIR/target/release/libdisplay_backends.so"
 BUTTON_SOURCE="${SAFE3_BUTTON_SOURCE:-$PROJECT_ROOT/platform/safe3/button_headless.c}"
 BUTTON_RESOURCES_SOURCE="${SAFE3_BUTTON_RESOURCES_SOURCE:-}"
@@ -21,7 +22,7 @@ if [[ "$(uname -s)" != Linux ]]; then
   exit 1
 fi
 
-for tool in cargo make rustc uv; do
+for tool in cargo make nm rustc strings uv; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required Safe 3 build tool: $tool" >&2
     exit 1
@@ -48,12 +49,12 @@ test -f "$DISPLAY_LIBRARY"
 
 mkdir -p "$DISPLAY_BUILD_DIR" "$DISPLAY_CARGO_TARGET"
 
-git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH"
-git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH"
+git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH" "$RANDOM_PATCH"
+git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH" "$RANDOM_PATCH"
 overlay_applied=true
 cleanup() {
   if [[ "${overlay_applied:-false}" == true ]]; then
-    git -C "$UPSTREAM_DIR" apply -R "$OVERLAY_PATCH"
+    git -C "$UPSTREAM_DIR" apply -R "$RANDOM_PATCH" "$OVERLAY_PATCH"
   fi
 }
 trap cleanup EXIT
@@ -77,6 +78,14 @@ export VIRTUAL_TREZOR_DISPLAY_LIBRARY="$DISPLAY_LIBRARY"
 
 CORE_OUTPUT="$DISPLAY_CARGO_TARGET/artifacts/T3B1/firmware-emu"
 test -x "$CORE_OUTPUT"
+if nm "$CORE_OUTPUT" | grep -E '[[:space:]]random_reseed$' >/dev/null; then
+  echo "Safe 3 worker unexpectedly contains the deterministic RNG reseed API" >&2
+  exit 1
+fi
+if ! strings "$CORE_OUTPUT" | grep -F '/dev/urandom' >/dev/null; then
+  echo "Safe 3 worker does not contain the secure Unix RNG path" >&2
+  exit 1
+fi
 install -m 0755 "$CORE_OUTPUT" "$OUTPUT"
 install -m 0755 "$DISPLAY_LIBRARY" "$DISPLAY_BUILD_DIR/libdisplay_backends.so"
 

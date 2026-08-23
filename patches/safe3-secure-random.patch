@@ -1,0 +1,49 @@
+diff --git a/core/embed/rtl/Cargo.toml b/core/embed/rtl/Cargo.toml
+index 81ee9a8238..a09849317b 100644
+--- a/core/embed/rtl/Cargo.toml
++++ b/core/embed/rtl/Cargo.toml
+@@ -20,7 +20,7 @@ models.workspace = true
+ 
+ aes_gcm = []
+ ed25519_no_precomp = []
+-emulator = ["insecure_prng", "models/emulator"]
++emulator = ["models/emulator"]
+ eos = []
+ insecure_prng = []
+ mldsa = []
+diff --git a/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h b/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
+index 39061ea2c2..538fddca52 100644
+--- a/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
++++ b/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
+@@ -95,7 +95,7 @@ STATIC mp_obj_t mod_trezorcrypto_random_shuffle(mp_obj_t data) {
+ STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_trezorcrypto_random_shuffle_obj,
+                                  mod_trezorcrypto_random_shuffle);
+ 
+-#ifdef TREZOR_EMULATOR
++#ifdef USE_INSECURE_PRNG
+ /// def reseed(value: int) -> None:
+ ///     """
+ ///     Re-seed the RNG with given value.
+@@ -116,7 +116,7 @@ STATIC const mp_rom_map_elem_t mod_trezorcrypto_random_globals_table[] = {
+      MP_ROM_PTR(&mod_trezorcrypto_random_bytes_obj)},
+     {MP_ROM_QSTR(MP_QSTR_shuffle),
+      MP_ROM_PTR(&mod_trezorcrypto_random_shuffle_obj)},
+-#ifdef TREZOR_EMULATOR
++#ifdef USE_INSECURE_PRNG
+     {MP_ROM_QSTR(MP_QSTR_reseed),
+      MP_ROM_PTR(&mod_trezorcrypto_random_reseed_obj)},
+ #endif
+diff --git a/core/embed/sys/rng/unix/rng.c b/core/embed/sys/rng/unix/rng.c
+index 071eece2f0..b80e8c1898 100644
+--- a/core/embed/sys/rng/unix/rng.c
++++ b/core/embed/sys/rng/unix/rng.c
+@@ -42,2 +42,9 @@ void rng_fill_buffer(void* buffer, size_t buffer_size) {
+ #endif
+ }
++
++#ifndef USE_INSECURE_PRNG
++// Keep vendor/trezor-crypto on the same RNG source as the Core HAL.
++void random_buffer(uint8_t* buffer, size_t buffer_size) {
++  rng_fill_buffer(buffer, buffer_size);
++}
++#endif

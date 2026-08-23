@@ -85,9 +85,9 @@ setup packets, configures endpoints, and processes packet callbacks as it would
 on hardware. A shared Rust discovery parser directly drives that controller
 through one control-transfer callback and returns the typed CBOR personality
 expected by the supervisor. At runtime supervisor control records and direct
-FunctionFS data handles drive the same virtual controller. Emulator flash,
-timer, and randomness remain in place; the UDP abstraction and desktop SDL do
-not.
+FunctionFS data handles drive the same virtual controller. Emulator flash and
+timer remain in place; the firmware randomness API is backed by Linux kernel
+entropy. The UDP abstraction and desktop SDL do not.
 
 One worker-owned helper thread serves each blocking FunctionFS endpoint; none
 calls firmware code. An OUT helper publishes one completed transfer through a
