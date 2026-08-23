@@ -24,6 +24,12 @@ static DisplayBackendsHandle *display = NULL;
 static bool error_reported = false;
 static bool suspended = false;
 static uint64_t retry_after_ms = 0;
+static uint32_t last_pixel_format;
+static size_t last_width;
+static size_t last_height;
+static size_t last_stride;
+static const uint8_t *last_framebuffer;
+static size_t last_length;
 
 static uint64_t monotonic_ms(void) {
   struct timespec now;
@@ -85,8 +91,11 @@ static bool initialize_display(void) {
   return true;
 }
 
-static void write_framebuffer(void) {
+static void write_last_frame(void) {
   if (suspended) {
+    return;
+  }
+  if (last_framebuffer == NULL) {
     return;
   }
   if (display == NULL && !initialize_display()) {
@@ -94,11 +103,23 @@ static void write_framebuffer(void) {
   }
 
   int error = display_backends_write_frame(
-      display, DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE, FRAME_WIDTH,
-      FRAME_HEIGHT, FRAME_STRIDE, oledGetBuffer(), TREZOR_FRAMEBUFFER_SIZE);
+      display, last_pixel_format, last_width, last_height, last_stride,
+      last_framebuffer, last_length);
   if (error != 0) {
     report_error("frame write", error);
   }
+}
+
+void worker_display_write_frame(uint32_t pixel_format, size_t width,
+                                size_t height, size_t stride,
+                                const uint8_t *framebuffer, size_t length) {
+  last_pixel_format = pixel_format;
+  last_width = width;
+  last_height = height;
+  last_stride = stride;
+  last_framebuffer = framebuffer;
+  last_length = length;
+  write_last_frame();
 }
 
 void worker_display_shutdown(void) {
@@ -145,12 +166,18 @@ void worker_display_resume(void) {
   }
   suspended = false;
   retry_after_ms = 0;
-  write_framebuffer();
+  write_last_frame();
 }
 
-void oledInit(void) { write_framebuffer(); }
+static void write_legacy_framebuffer(void) {
+  worker_display_write_frame(DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE,
+                             FRAME_WIDTH, FRAME_HEIGHT, FRAME_STRIDE,
+                             oledGetBuffer(), TREZOR_FRAMEBUFFER_SIZE);
+}
 
-void oledRefresh(void) { write_framebuffer(); }
+void oledInit(void) { write_legacy_framebuffer(); }
+
+void oledRefresh(void) { write_legacy_framebuffer(); }
 
 void emulatorPoll(void) {
   if (display != NULL || retry_after_ms == 0) {
@@ -159,7 +186,7 @@ void emulatorPoll(void) {
   if (monotonic_ms() < retry_after_ms) {
     return;
   }
-  write_framebuffer();
+  write_last_frame();
 }
 
 int worker_display_retry_timeout_ms(void) {
