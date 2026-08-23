@@ -111,6 +111,9 @@ browser discovery and access. The worker reports the firmware's device release
 `1.00` without a virtual override. Windows may retain a cached result from an
 earlier gadget with the same identity; clearing that host-side cache is an
 operational concern rather than part of descriptor discovery.
+Worker-requested reconnects preserve the firmware process while the supervisor
+replaces the complete USB generation and guarantees at least 250 ms detached
+before rebinding.
 
 A real Trezor One uses SPI for its OLED. The physical-HAT backend therefore preserves that
 transport style, while I2C remains an intentional Raspberry Pi adaptation for

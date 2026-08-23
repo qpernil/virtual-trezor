@@ -92,7 +92,9 @@ The worker runs directly from this repository's build directory. Install the
 root-owned default profile for the factory-configured SH1106 SPI HAT:
 
 ```sh
-sudo install -o root -g root -m 0644 profiles/virtual-trezor.toml \
+cp profiles/virtual-trezor.toml /tmp/virtual-trezor.toml
+editor /tmp/virtual-trezor.toml
+sudo install -o root -g root -m 0644 /tmp/virtual-trezor.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
 ```
 
@@ -100,14 +102,18 @@ Install the explicitly named I2C profile when driving the second-Pi virtual
 display or an I2C-native module:
 
 ```sh
-sudo install -o root -g root -m 0644 profiles/virtual-trezor-i2c.toml \
+cp profiles/virtual-trezor-i2c.toml /tmp/virtual-trezor-i2c.toml
+editor /tmp/virtual-trezor-i2c.toml
+sudo install -o root -g root -m 0644 /tmp/virtual-trezor-i2c.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-i2c.toml
 ```
 
 Install the ST7789 profile for the Waveshare 1.3-inch 240x240 LCD HAT:
 
 ```sh
-sudo install -o root -g root -m 0644 profiles/virtual-trezor-st7789.toml \
+cp profiles/virtual-trezor-st7789.toml /tmp/virtual-trezor-st7789.toml
+editor /tmp/virtual-trezor-st7789.toml
+sudo install -o root -g root -m 0644 /tmp/virtual-trezor-st7789.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
 ```
 
@@ -147,15 +153,10 @@ them to logical pressed bits; GPIO13 maps the physical HAT's joystick press to
 both logical buttons. GPIO5/GPIO26 can instead connect to the button outputs of
 the second-Pi virtual-display client.
 
-The checked-in profiles use neutral placeholders. Before installing one, set
-`worker.command` to the built worker's absolute path and `worker.run_as` to its
-unprivileged service account:
-
-```sh
-editor profiles/virtual-trezor.toml
-editor profiles/virtual-trezor-i2c.toml
-editor profiles/virtual-trezor-st7789.toml
-```
+The checked-in profiles use neutral placeholders. The temporary copies above
+must set `worker.command` to the built worker's absolute path and
+`worker.run_as` to its unprivileged service account. Keep machine-local paths
+out of the checked-in templates.
 
 Confirm that the installed service template uses the same `/opt` layout:
 
