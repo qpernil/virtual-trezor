@@ -2,9 +2,69 @@
 
 ## Status
 
-This document records an agreed future design. Implementation is paused until
-the active cryptography refactor has established a stable boundary that the
-new worker can consume. It does not change the current Virtual Trezor runtime.
+Implementation is active. The first checked-in build boundary uses the
+project-owned `mk/safe3-worker.mk`, consumes the same pinned upstream checkout,
+selects `TREZOR_MODEL=T3B1`, and stages its output under
+`build/safe3-t3b1/unix/`. The complete generated and object tree—not merely a
+copied executable—lives in that destination. It does not change the current
+Virtual Trezor runtime.
+
+The initial `make safe3-baseline` target intentionally produces the untouched
+upstream Unix emulator and calls the artifact `trezor-emu-core`. It proves the
+genuine T3B1 Core, MicroPython, Rust UI, cryptography, model, and dependency
+graph before platform substitution. It retains SDL display/input, UDP USB, and
+the upstream 1 ms idle poll, and remains useful as a desktop diagnostic.
+
+The completed `make safe3-display` target is the first platform substitution
+and is deliberately display-only. It links no SDL library or SDL source. The
+existing Trezor One adapter now accepts a described producer frame instead of
+assuming that every firmware supplies its legacy OLED layout. Trezor One
+continues to submit its unchanged 1-bit page buffer. The project-owned Core
+display driver implements the genuine T3B1 display API and submits Core's
+unchanged 8192-byte `Mono8` framebuffer through the same adapter. Unit coverage
+verifies both formats, the driver is compiled against the pinned upstream
+headers, and the genuine Core homescreen has run on the Pi's ST7789 display.
+
+Because SDL previously supplied both rendering and event collection, this
+target also selects an inert implementation of the Core button API and removes
+the SDL event pump. It does not yet implement input. USB remains on the
+upstream UDP transport, while lifecycle, timing, storage, and the Unix wait
+loop remain unchanged. The diagnostic target may open the Pi display resources
+directly, or accept already-open display descriptors through its environment;
+the final worker will receive named resources from the supervisor.
+
+The pinned Core source uses nightly-only Rust language features. During initial
+development every project follows the current stable Rust toolchain; the Safe 3
+build invokes Cargo with an explicit `RUSTC_BOOTSTRAP=1` because the unchanged
+upstream crate still declares those features. The overlay also injects the
+`custom_test_frameworks` crate feature required by current stable for
+upstream's existing test-harness attribute. This is intentionally a rolling
+compiler boundary: later stable regressions will be fixed when encountered
+rather than hidden behind a repository-specific toolchain pin.
+
+The untouched baseline retains the upstream Unix SDL renderer. On the tested
+Ubuntu system its native build prerequisites are:
+
+```sh
+sudo apt install libsdl2-dev libsdl2-image-dev libjpeg-dev \
+  libclang-common-21-dev
+make safe3-baseline
+```
+
+The Clang package supplies the standard C resource headers used by Rust
+bindgen. On an Ubuntu release with a different LLVM major, install the matching
+`libclang-common-<major>-dev` package. SDL belongs only to the optional
+diagnostic baseline. The physical display target requires the non-SDL
+prerequisites and builds with:
+
+```sh
+sudo apt install libjpeg-dev libclang-common-21-dev
+make safe3-display
+```
+
+It produces `build/safe3-t3b1-display/virtual-trezor-safe3-display` and a
+co-located `libdisplay_backends.so`; its runtime dependency check rejects any
+accidental SDL linkage.
 
 The first Core target will be Trezor Safe 3 revision B, upstream model `T3B1`.
 The existing Trezor One (`T1B1`) worker remains supported as an independent
@@ -68,8 +128,10 @@ pieces:
   polling.
 
 Project-owned integration code may select upstream sources, set model/build
-options, and implement required platform symbols. It must not patch files in
-the pinned upstream submodule.
+options, and implement required platform symbols. The current build applies a
+small, checked project-owned source-selection overlay and reverses it on every
+exit. The pinned upstream submodule therefore remains clean and its revision is
+recorded with the build.
 
 ## Display contract
 
@@ -164,12 +226,13 @@ cryptography refactor before source lists or ownership are fixed.
 
 ## Delivery stages
 
-1. **After the crypto refactor:** confirm the shared cryptography boundary,
-   select and pin a reviewed upstream Core revision, and record provenance.
-2. **Build boundary:** produce a headless `T3B1` Core worker without changing
-   the existing Trezor One target or upstream files.
-3. **Display and input:** deliver the unchanged `Mono8` framebuffer through
-   `display-backends` and exercise the genuine two-button Core interaction.
+1. **Baseline complete:** pin and compile the genuine T3B1 Core source graph
+   separately from Trezor One, recording provenance and the compiler boundary.
+2. **Display boundary complete:** remove SDL and deliver the unchanged `Mono8`
+   framebuffer through the shared adapter and `display-backends`. The button
+   API is inert; USB, lifecycle, and timing retain their upstream behavior.
+3. **Input:** replace SDL buttons and exercise genuine Core press/release
+   interaction through the Pi GPIO resources.
 4. **USB and lifecycle:** enumerate through the supervisor, handle protocol
    traffic and reconnects, and isolate state and resources from Trezor One.
 5. **Timing:** replace idle polling with the bounded event-driven wait and

@@ -188,6 +188,32 @@ The baseline target is diagnostic only and still uses upstream SDL/UDP. On
 Linux, `make worker` builds the headless FunctionFS/I2C/SPI/GPIO worker; it
 links neither upstream UDP nor SDL display/button implementations.
 
+The separate Safe 3 (`T3B1`) baseline proves the genuine Core, MicroPython,
+Rust UI, and cryptography source graph without changing the Trezor One worker:
+
+```sh
+make safe3-baseline
+```
+
+The baseline intentionally retains upstream SDL display/input and UDP USB. The
+first platform substitution is the separate, Linux-only display target:
+
+```sh
+make safe3-display
+```
+
+This target removes SDL entirely. Its project-owned Core display driver sends
+the genuine 128x64 `Mono8` framebuffer unchanged to `display-backends`; the
+selected backend alone converts and scales it for the physical panel. Button
+input is deliberately inert in this stage, while USB remains on the upstream
+UDP transport and the upstream lifecycle and timing remain unchanged. The
+result is `build/safe3-t3b1-display/virtual-trezor-safe3-display`, accompanied
+by its shared `libdisplay_backends.so`. Run the unfrozen Core binary with
+`upstream/trezor-firmware/core/src` as its working directory.
+
+See the Safe 3 plan for Ubuntu prerequisites and the later GPIO, supervisor
+USB, lifecycle, and timing stages.
+
 ## Documentation
 
 - [Architecture and platform boundaries](docs/architecture.md)

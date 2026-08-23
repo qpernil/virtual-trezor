@@ -1,0 +1,128 @@
+diff --git a/core/SConscript.unix b/core/SConscript.unix
+index 3674d5f33f..0dcc5d1b3c 100644
+--- a/core/SConscript.unix
++++ b/core/SConscript.unix
+@@ -19,6 +19,7 @@ RASPI = os.getenv('TREZOR_EMULATOR_RASPI') == '1'
+ MICROPY_ENABLE_SOURCE_LINE = ARGUMENTS.get('MICROPY_ENABLE_SOURCE_LINE', '1')
+ DBG_CONSOLE = ARGUMENTS.get('DBG_CONSOLE', '')
+ EXTAPP_SUPPORT = ARGUMENTS.get('EXTAPP_SUPPORT', '0') == '1'
++HEADLESS_DISPLAY = os.getenv('VIRTUAL_TREZOR_HEADLESS_DISPLAY') == '1'
+ 
+ 
+ if BENCHMARK and PYOPT != '0':
+@@ -460,6 +461,27 @@ env = Environment(
+ 
+ FEATURES_AVAILABLE = models.configure_board(TREZOR_MODEL, HW_REVISION, FEATURES_WANTED, env, CPPDEFINES_HAL, SOURCE_UNIX, PATH_HAL)
+ 
++if HEADLESS_DISPLAY:
++    display_source = os.environ['VIRTUAL_TREZOR_DISPLAY_SOURCE']
++    display_resources_source = os.environ['VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE']
++    button_source = os.environ['VIRTUAL_TREZOR_BUTTON_SOURCE']
++    replacements = {
++        'embed/io/display/unix/display_driver.c': display_source,
++        'embed/io/button/unix/button.c': button_source,
++    }
++    SOURCE_UNIX = [
++        replacements.get(source, source)
++        for source in SOURCE_UNIX
++        if source != 'embed/sys/task/unix/sdl_event.c'
++    ]
++    SOURCE_UNIX += [display_resources_source]
++    CPPPATH_MOD += [
++        os.path.dirname(display_source),
++        os.environ['VIRTUAL_TREZOR_DISPLAY_INCLUDE'],
++        'embed/io/button',
++    ]
++    CPPDEFINES_MOD += ['VIRTUAL_TREZOR_HEADLESS_DISPLAY']
++
+ env.Tool('micropython')
+ 
+ env.Replace(
+@@ -544,10 +566,20 @@ try:
+ except OSError:
+     print("libjpeg not installed, Emulator build is not possible")
+ 
+-try:
+-    env.ParseConfig('pkg-config --cflags --libs sdl2 SDL2_image')
+-except OSError:
+-    print("SDL2 not installed, Emulator build is not possible")
++if HEADLESS_DISPLAY:
++    env.Append(
++        LINKFLAGS=[
++            '-L' + os.path.dirname(os.environ['VIRTUAL_TREZOR_DISPLAY_LIBRARY']),
++            '-ldisplay_backends',
++            "-Wl,-rpath,'$$ORIGIN'",
++            '-pthread',
++            '-ldl',
++        ])
++else:
++    try:
++        env.ParseConfig('pkg-config --cflags --libs sdl2 SDL2_image')
++    except OSError:
++        print("SDL2 not installed, Emulator build is not possible")
+ 
+ BYTECODE_OPTIMIZATION = {'0': '0', '1': '3'}[PYOPT]
+ 
+diff --git a/core/embed/projects/unix/main_main.c b/core/embed/projects/unix/main_main.c
+index 6901931314..c0829a21a2 100644
+--- a/core/embed/projects/unix/main_main.c
++++ b/core/embed/projects/unix/main_main.c
+@@ -58,7 +58,9 @@
+ #include "zkp_context.h"
+ #endif
+ 
++#ifndef VIRTUAL_TREZOR_HEADLESS_DISPLAY
+ #include <SDL.h>
++#endif
+ 
+ #ifdef USE_TROPIC
+ static uint16_t get_tropic_model_port(void) {
+@@ -110,6 +112,7 @@ static void drivers_init(void) {
+ #endif
+ }
+ 
++#ifndef VIRTUAL_TREZOR_HEADLESS_DISPLAY
+ // Throws MicroPython SystemExit exception in the context of the given task
+ static void throw_exit_exception(systask_t *task, int code) {
+   extern void coreapp_throw_exit_exception(int code);
+@@ -143,6 +146,7 @@ static int sdl_event_filter(void *userdata, SDL_Event *event) {
+   }
+   return 1;
+ }
++#endif
+ 
+ // Kernel task main loop
+ //
+@@ -177,8 +181,10 @@ int main(int argc, char **argv) {
+     error_shutdown("Cannot start coreapp");
+   }
+ 
++#ifndef VIRTUAL_TREZOR_HEADLESS_DISPLAY
+   // Set SDL event filter to catch quit events
+   SDL_SetEventFilter(sdl_event_filter, &coreapp);
++#endif
+ 
+   // Run the coreapp task
+   applet_run(&coreapp);
+diff --git a/core/embed/sys/task/sysevent.c b/core/embed/sys/task/sysevent.c
+index a0431527de..1f3ce36aa1 100644
+--- a/core/embed/sys/task/sysevent.c
++++ b/core/embed/sys/task/sysevent.c
+@@ -33,7 +33,7 @@
+ #include <sys/applet.h>
+ #endif
+ 
+-#ifdef TREZOR_EMULATOR
++#if defined(TREZOR_EMULATOR) && !defined(VIRTUAL_TREZOR_HEADLESS_DISPLAY)
+ #include <sys/unix/sdl_event.h>
+ #endif
+ 
+@@ -229,7 +229,7 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
+   }
+ 
+   for (;;) {
+-#ifdef TREZOR_EMULATOR
++#if defined(TREZOR_EMULATOR) && !defined(VIRTUAL_TREZOR_HEADLESS_DISPLAY)
+     // Poll SDL events and dispatch them
+     sdl_events_poll();
+ #endif

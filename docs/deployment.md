@@ -50,8 +50,8 @@ Debian-family systems the base packages are:
 sudo apt install build-essential git pkg-config python3-dev libffi-dev rustup
 sudo snap install astral-uv --classic
 rustup set profile minimal
-rustup toolchain install 1.85.0
-rustup default 1.85.0
+rustup toolchain install stable
+rustup default stable
 ```
 
 The build uses `uv tool run` with pinned `grpcio-tools==1.81.0`, which provides
