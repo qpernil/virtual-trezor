@@ -71,6 +71,11 @@ an empty personality and the supervisor removes the USB generation without
 terminating Core; release sends the complete builder-produced personality and
 binds a new generation without an artificial delay.
 
+USB lifecycle remains separate from genuine Core display policy: suspend,
+unbind, and KEY3 do not directly power the panel down. Intentional worker
+shutdown is different; the worker acknowledges quiescence, exits normally, and
+deinitializes the display so the backlight cannot remain on after service stop.
+
 Initial configuration is empty because Core deliberately opens USB only after
 its boot/unlock flow. That empty record declares the worker ready without
 creating a generation; the later `usb_start` publishes generation one. KEY3

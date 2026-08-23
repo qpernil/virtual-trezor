@@ -65,18 +65,21 @@ systemd service must perform final teardown without creating another worker.
 With the Pi independently powered, put the attached host to sleep and wake it.
 The worker PID and USB generation must survive. Accept either a direct
 `SUSPEND`/`RESUME` or a wake-time `SUSPEND`/`DISABLE`/`ENABLE`; confirm traffic
-continues afterward. Confirm the suspend log reports a completed flash
-checkpoint, the display turns off while suspended, and resume redraws the
-current framebuffer. The worker should consume no periodic 10 ms wakeups while
-suspended, and a firmware deadline that was pending before suspend should have
-the same remaining duration after resume. If the host supplies the Pi's only
-power, first determine whether that machine and hub retain VBUS during
-sleep—VBUS loss cold-boots the Pi and cannot be handled as a USB event.
+continues afterward. For legacy Trezor, confirm the suspend log reports a
+completed flash checkpoint, the display turns off, and resume redraws the
+current framebuffer. Its worker should consume no periodic 10 ms wakeups while
+suspended, and a pending firmware deadline should retain the same remaining
+duration after resume. Safe 3 instead leaves display policy with genuine Core;
+confirm endpoint traffic pauses and resumes while the panel remains available.
+If the host supplies the Pi's only power, first determine whether that machine
+and hub retain VBUS during sleep—VBUS loss cold-boots the Pi and cannot be
+handled as a USB event.
 
-For ST7789, distinguish the two dark states physically: normal firmware
+For legacy ST7789, distinguish the two dark states physically: normal firmware
 screensaver blanking leaves the backlight on, while USB suspend turns the
 backlight off. Resume powers the backend again even when the firmware
-framebuffer remains black.
+framebuffer remains black. Safe 3 screensaver blanking likewise leaves its
+backlight on, but USB suspend does not currently alter it.
 
 ## Display and buttons
 

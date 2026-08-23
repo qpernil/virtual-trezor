@@ -868,8 +868,12 @@ static void handle_runtime_record(struct worker_record *record) {
   } else if (record->kind == KIND_QUIESCE &&
              record->generation == g_usb.generation &&
              record->body_length == 0 && record->fd_count == 0) {
+    bool shutdown = record->request_id == 0;
     close_endpoints();
     send_record(KIND_QUIESCED, g_usb.generation, record->request_id, NULL, 0);
+    if (shutdown) {
+      exit(0);
+    }
   } else {
     close_record_fds(record);
     die("unexpected Safe 3 supervisor runtime record");

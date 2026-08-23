@@ -9,6 +9,7 @@
 #include <io/display.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "display_backends.h"
@@ -21,6 +22,7 @@
 
 typedef struct {
   bool initialized;
+  bool shutdown_registered;
   int orientation_angle;
   uint8_t backlight_level;
   uint8_t framebuffer[SAFE3_FRAME_LENGTH];
@@ -29,9 +31,20 @@ typedef struct {
 
 static safe3_display_driver_t g_display;
 
+static void display_shutdown_at_exit(void) {
+  display_deinit(DISPLAY_RESET_CONTENT);
+}
+
 bool display_init(display_content_mode_t mode) {
   if (g_display.initialized) {
     return true;
+  }
+  if (!g_display.shutdown_registered) {
+    if (atexit(display_shutdown_at_exit) != 0) {
+      fputs("virtual-trezor-safe3: cannot register display shutdown\n", stderr);
+      return false;
+    }
+    g_display.shutdown_registered = true;
   }
   if (mode == DISPLAY_RESET_CONTENT) {
     memset(g_display.framebuffer, 0, sizeof(g_display.framebuffer));
@@ -72,6 +85,8 @@ void display_deinit(display_content_mode_t mode) {
   if (error != 0) {
     fprintf(stderr, "virtual-trezor-safe3: display shutdown failed: %s\n",
             strerror(error));
+  } else {
+    fputs("virtual-trezor-safe3: display shut down\n", stderr);
   }
   display_backends_destroy(g_display.display);
   g_display.display = NULL;
