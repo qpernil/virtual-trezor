@@ -57,7 +57,8 @@ worker with fresh FDs, rebind, and return the UDC to `configured`.
 Exercise `usbReconnect()` and confirm the supervisor asks the existing worker
 to quiesce, replaces FunctionFS and the OUT/IN endpoint files, unbinds and
 rebinds the UDC, and re-enumerates
-without changing the worker PID. Separately kill the worker and confirm that
+without changing the worker PID. Confirm the UDC remains detached for at least
+250 ms before replacement bind. Separately kill the worker and confirm that
 process failure still causes a complete fresh-process cycle. Stopping the
 systemd service must perform final teardown without creating another worker.
 

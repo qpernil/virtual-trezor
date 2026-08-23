@@ -103,8 +103,9 @@ The supervisor control socket carries named hardware resources once, complete
 USB configurations from worker to supervisor, quiesce/serving lifecycle
 records, and replacement FunctionFS endpoint files. `usbReconnect()` republishes the
 firmware personality and causes a real UDC unbind/rebind while the firmware
-process survives. Invalid replacement CBOR is rejected before the active USB
-generation is disturbed.
+process survives. The supervisor guarantees at least 250 ms between UDC detach
+and replacement bind. Invalid replacement CBOR is rejected before the active
+USB generation is disturbed.
 
 Host sleep is a normal firmware lifecycle, not a process restart. A
 `SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.

@@ -61,7 +61,7 @@ application handle is not a USB lifecycle event.
 another complete CBOR personality, quiesces and closes its current endpoint
 FDs on request, installs the replacements, and acknowledges readiness before
 the supervisor rebinds the UDC. The firmware process survives the host-visible
-disconnect/re-enumeration.
+disconnect/re-enumeration, whose detached interval is at least 250 ms.
 
 The I2C profile declares `/dev/i2c-1` as its required `display-i2c` resource.
 The supervisor opens it while privileged and includes its descriptor in the
