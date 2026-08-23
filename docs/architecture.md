@@ -114,18 +114,22 @@ personality again. The supervisor binds it immediately: the physical hold is
 the complete detached interval, so the atomic-replacement 250 ms floor does not
 apply.
 
-Host sleep is a normal firmware lifecycle, not a process restart. A
-`SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.
-On suspend the worker first invokes the firmware callback, synchronously
+Host sleep is a normal firmware lifecycle, not a process restart. For the
+legacy worker, a `SUSPEND`/`RESUME` pair preserves the current generation and
+all firmware state. Suspend invokes the firmware callback, synchronously
 checkpoints the mapped emulator flash image, turns the display off, and parks
 inside the pollable supervisor control channel. The Raspberry Pi platform timer
-does not advance while parked, so the firmware's auto-lock and busy-screen
-deadlines do not consume suspended time. Resume, or a reset-style wake followed
-by enable, restarts virtual time, reinitializes the display, and retransmits the
-current framebuffer without restarting the firmware. The focused
+does not advance while parked, so firmware deadlines do not consume suspended
+time. Resume, or a reset-style wake followed by enable, restarts virtual time,
+reinitializes the display, and retransmits the current framebuffer. The focused
 flash checkpoint avoids stalling on unrelated filesystems; it is an
 opportunistic safeguard rather than a guarantee that power will remain long
 enough to complete it.
+
+Safe 3 preserves its generation and gates endpoint readiness across the same
+USB suspend/resume events, but genuine Core retains display policy: suspend,
+unbind, and KEY3 ejection do not directly power the panel down. A clean worker
+shutdown does explicitly deinitialize the display and disable its backlight.
 If wake resets the link, `DISABLE`/`ENABLE` resets the virtual controller and
 replays firmware configuration while leaving the worker alive. If USB VBUS is
 the Pi's only power and the host removes it, the result is necessarily a cold
