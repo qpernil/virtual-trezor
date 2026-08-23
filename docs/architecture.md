@@ -107,6 +107,13 @@ process survives. The supervisor guarantees at least 250 ms between UDC detach
 and replacement bind. Invalid replacement CBOR is rejected before the active
 USB generation is disturbed.
 
+Safe 3 also uses the control channel's split reconnect form. A KEY3 press sends
+an empty `Configure`, which unbinds and removes the active generation while the
+worker and firmware keep running. KEY3 release sends the genuine Core
+personality again. The supervisor binds it immediately: the physical hold is
+the complete detached interval, so the atomic-replacement 250 ms floor does not
+apply.
+
 Host sleep is a normal firmware lifecycle, not a process restart. A
 `SUSPEND`/`RESUME` pair preserves the current generation and all firmware state.
 On suspend the worker first invokes the firmware callback, synchronously

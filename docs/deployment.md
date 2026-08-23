@@ -76,10 +76,22 @@ make check
 make worker
 ```
 
-Keep all three repositories as siblings. The worker links the current
-`display-backends` native library and the supervisor repository's shared
-`usb-gadget-worker` discovery/CBOR static library. The resulting executable is
+Keep all three repositories as siblings. The Trezor One worker links the
+current `display-backends` native library and the supervisor repository's
+worker-side discovery/CBOR library. The resulting executable is
 `build/virtual-trezor-worker`.
+
+For the cumulative Safe 3 display, GPIO, and supervisor USB target, install
+`libjpeg-dev` plus the LLVM resource-header package matching the host and run:
+
+```sh
+make safe3-usb
+```
+
+This produces `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` and its two
+co-located shared libraries. Safe 3 uses the current stable Rust toolchain with
+the narrowly scoped bootstrap flag required by unchanged upstream Core
+nightly features.
 
 ## Install the supervisor and worker
 
@@ -117,6 +129,22 @@ sudo install -o root -g root -m 0644 /tmp/virtual-trezor-st7789.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
 ```
 
+Install the independent Safe 3 profile after building `make safe3-usb`:
+
+```sh
+cp profiles/virtual-trezor-safe3.toml /tmp/virtual-trezor-safe3.toml
+editor /tmp/virtual-trezor-safe3.toml
+sudo install -o root -g root -m 0644 /tmp/virtual-trezor-safe3.toml \
+  /opt/usb-gadget-supervisor/profiles/virtual-trezor-safe3.toml
+```
+
+Set its command to the Safe 3 USB artifact, set its script argument to the
+absolute `upstream/trezor-firmware/core/src/main.py` path, and use a distinct
+state directory. Before Core starts, the worker exports that directory through
+Core's standard `TREZOR_PROFILE_DIR` interface and changes into it. Core's
+unchanged Unix flash emulator consequently creates `trezor.flash` there; the
+absolute script path supplies Core's source import root.
+
 The resulting choices are:
 
 | Supervisor instance | Display path | Worker argument |
@@ -124,6 +152,7 @@ The resulting choices are:
 | `virtual-trezor` | Direct SH1106 over SPI0 | none; `sh1106-spi` is the default |
 | `virtual-trezor-i2c` | SH1106 over I2C1, including the second-Pi viewer | `--display=sh1106-i2c` |
 | `virtual-trezor-st7789` | Direct 240x240 ST7789 LCD over SPI0 | `--display=st7789-spi` |
+| `virtual-trezor-safe3` | Direct 240x240 ST7789 LCD over SPI0 | absolute Core `src/main.py` path |
 
 The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
 `/dev/i2c-1`. Both also declare one display-control output group and one button
@@ -133,6 +162,9 @@ privileges. It does not pass the GPIO-chip descriptor, so the worker can neither
 select different offsets nor change line configuration. No `i2c`, `spi`, or
 `gpio` group membership is required. The worker exits rather than silently
 running without its display or buttons if a required resource is missing.
+Safe 3 initially declares readiness with an empty USB personality. Genuine Core
+may therefore remain in an interactive boot or unlock flow indefinitely before
+Python opens USB, while the supervisor and worker remain healthy.
 
 The worker defaults to `sh1106-spi`. Override it in an alternate profile when
 needed; do not rely on I2C address probing, because both I2C controllers
@@ -178,6 +210,9 @@ sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
 sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
   --check-profile \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
+sudo /opt/usb-gadget-supervisor/usb-gadget-supervisor \
+  --check-profile \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-safe3.toml
 ```
 
 ## Physical SH1106 SPI HAT
@@ -210,8 +245,9 @@ The factory HAT mapping is:
 
 No/left and Yes/right mean the HAT joystick directions. Pressing the joystick
 straight down reports both logical Trezor buttons simultaneously. The separate
-KEY1, KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16 and are not
-sampled.
+KEY1, KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16. The Safe 3 USB
+profile reserves KEY3: holding it unconfigures the gadget and releasing it
+publishes a fresh USB generation. KEY1 and KEY2 remain unassigned.
 
 The worker configures mode 0 at 4 MHz. Power down before fitting or removing
 the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring

@@ -88,6 +88,11 @@ visible and both active-low firmware buttons work:
 - ST7789 SPI: GPIO25 data/command, GPIO27 reset, GPIO24 backlight; and
 - buttons: GPIO5, GPIO26, with GPIO13 center mapped to both.
 
+For Safe 3, hold display-HAT KEY3 (GPIO16) and confirm the host loses the USB
+device while the worker PID remains alive. It must stay absent for the complete
+hold, then enumerate as a fresh generation immediately after release. Repeat
+with short and long holds and confirm old host handles no longer transfer.
+
 Fault-inject a display disconnect. USB must remain operational, and the regular
 firmware polling path must reinitialize and retransmit the current framebuffer
 after the resource returns.

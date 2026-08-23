@@ -10,6 +10,8 @@
 #include <trezor_rtl.h>
 
 #include <errno.h>
+#include <fcntl.h>
+#include <linux/gpio.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -127,6 +129,7 @@ typedef struct {
   bool started;
   bool enabled;
   bool suspended;
+  bool ejected;
   bool landing_page;
   uint32_t generation;
   uint32_t next_request_id;
@@ -142,6 +145,7 @@ static safe3_usb_driver_t g_usb = {.next_request_id = 1};
 static int g_display_bus_fd = -1;
 static int g_display_control_fd = -1;
 static int g_button_lines_fd = -1;
+static int g_reconnect_button_fd = -1;
 
 static void die_errno(const char *operation) {
   fprintf(stderr, "virtual-trezor-safe3: %s: %s\n", operation,
@@ -288,6 +292,9 @@ static void assign_resource(const char *name, size_t length, int fd) {
   } else if (length == strlen("buttons") &&
              memcmp(name, "buttons", length) == 0) {
     g_button_lines_fd = fd;
+  } else if (length == strlen("reconnect-button") &&
+             memcmp(name, "reconnect-button", length) == 0) {
+    g_reconnect_button_fd = fd;
   } else {
     close(fd);
     die("unknown supervisor resource name");
@@ -301,6 +308,9 @@ __attribute__((constructor)) static void receive_initial_resources(void) {
   const char *state_directory = getenv("STATE_DIRECTORY");
   if (state_directory == NULL || state_directory[0] != '/') {
     die("STATE_DIRECTORY is missing or invalid");
+  }
+  if (setenv("TREZOR_PROFILE_DIR", state_directory, 1) != 0) {
+    die_errno("set Core profile directory");
   }
   if (chdir(state_directory) != 0) {
     die_errno("enter worker state directory");
@@ -333,8 +343,14 @@ __attribute__((constructor)) static void receive_initial_resources(void) {
   }
   record.fd_count = 0;
   if (offset != record.body_length || g_display_bus_fd < 0 ||
-      g_display_control_fd < 0 || g_button_lines_fd < 0) {
+      g_display_control_fd < 0 || g_button_lines_fd < 0 ||
+      g_reconnect_button_fd < 0) {
     die("incomplete Safe 3 supervisor resource set");
+  }
+  int flags = fcntl(g_reconnect_button_fd, F_GETFL);
+  if (flags < 0 ||
+      fcntl(g_reconnect_button_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    die_errno("make Safe 3 reconnect button nonblocking");
   }
 }
 
@@ -553,6 +569,74 @@ static bool configure_until_endpoints(bool replacement) {
   }
 }
 
+static void unconfigure_until_quiesced(void) {
+  uint32_t request_id = g_usb.next_request_id++;
+  if (request_id == 0) {
+    die("Safe 3 USB configuration request ID overflow");
+  }
+  send_record(KIND_CONFIGURE, g_usb.generation, request_id, NULL, 0);
+  for (;;) {
+    struct worker_record record;
+    receive_record(&record, 0);
+    if (record.kind == KIND_CONFIGURATION_REJECTED &&
+        record.generation == g_usb.generation &&
+        record.request_id == request_id && record.fd_count == 0) {
+      fprintf(stderr,
+              "virtual-trezor-safe3: supervisor rejected USB ejection: %.*s\n",
+              (int)record.body_length, (const char *)record.body);
+      return;
+    }
+    if (record.kind != KIND_QUIESCE ||
+        record.generation != g_usb.generation ||
+        record.request_id != request_id || record.body_length != 0 ||
+        record.fd_count != 0) {
+      close_record_fds(&record);
+      die("unexpected supervisor record during Safe 3 ejection");
+    }
+    close_endpoints();
+    send_record(KIND_QUIESCED, g_usb.generation, request_id, NULL, 0);
+    g_usb.ejected = true;
+    fprintf(stderr,
+            "virtual-trezor-safe3: USB ejected; waiting for KEY3 release\n");
+    return;
+  }
+}
+
+typedef enum {
+  RECONNECT_TRANSITION_NONE = -1,
+  RECONNECT_TRANSITION_RELEASED = 0,
+  RECONNECT_TRANSITION_PRESSED = 1,
+} reconnect_transition_t;
+
+static reconnect_transition_t take_reconnect_transition(void) {
+  for (;;) {
+    struct gpio_v2_line_event event;
+    ssize_t length = read(g_reconnect_button_fd, &event, sizeof(event));
+    if (length == (ssize_t)sizeof(event)) {
+      if (event.id == GPIO_V2_LINE_EVENT_RISING_EDGE) {
+        return RECONNECT_TRANSITION_PRESSED;
+      }
+      if (event.id == GPIO_V2_LINE_EVENT_FALLING_EDGE) {
+        return RECONNECT_TRANSITION_RELEASED;
+      }
+      continue;
+    }
+    if (length < 0 && errno == EINTR) {
+      continue;
+    }
+    if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      return RECONNECT_TRANSITION_NONE;
+    }
+    if (length == 0) {
+      die("Safe 3 reconnect button resource closed");
+    }
+    if (length < 0) {
+      die_errno("read Safe 3 reconnect button");
+    }
+    die("partial Safe 3 reconnect button event");
+  }
+}
+
 static void send_control_response(uint32_t request_id, uint8_t disposition,
                                   const uint8_t *data, size_t length) {
   uint8_t *body = malloc(1 + length);
@@ -729,11 +813,15 @@ static void handle_runtime_record(struct worker_record *record) {
 }
 
 static void service_controller(void) {
-  struct pollfd fds[1 + MAX_ENDPOINT_NUMBER];
+  struct pollfd fds[2 + MAX_ENDPOINT_NUMBER];
   endpoint_t *ready_endpoints[MAX_ENDPOINT_NUMBER];
   size_t count = 0;
   fds[count++] = (struct pollfd){.fd = CONTROL_FD,
                                  .events = POLLIN | POLLHUP | POLLERR};
+  size_t reconnect_index = count;
+  fds[count++] = (struct pollfd){.fd = g_reconnect_button_fd,
+                                 .events = POLLIN | POLLHUP | POLLERR};
+  size_t endpoint_start = count;
   size_t ready_count = 0;
   if (g_usb.enabled) {
     for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
@@ -757,8 +845,29 @@ static void service_controller(void) {
     receive_record(&record, MSG_DONTWAIT);
     handle_runtime_record(&record);
   }
+  if ((fds[reconnect_index].revents & POLLIN) != 0) {
+    reconnect_transition_t transition = take_reconnect_transition();
+    if (transition == RECONNECT_TRANSITION_PRESSED && g_usb.started &&
+        !g_usb.ejected) {
+      fprintf(stderr, "virtual-trezor-safe3: KEY3 USB eject requested\n");
+      unconfigure_until_quiesced();
+      return;
+    }
+    if (transition == RECONNECT_TRANSITION_RELEASED && g_usb.started &&
+        g_usb.ejected) {
+      fprintf(stderr, "virtual-trezor-safe3: KEY3 USB insertion requested\n");
+      if (!configure_until_endpoints(false)) {
+        die("supervisor rejected Safe 3 USB insertion");
+      }
+      g_usb.ejected = false;
+      return;
+    }
+  }
+  if ((fds[reconnect_index].revents & ~(POLLIN)) != 0) {
+    die("Safe 3 reconnect button reported an unexpected poll event");
+  }
   for (size_t i = 0; i < ready_count; i++) {
-    if ((fds[1 + i].revents & POLLIN) != 0) {
+    if ((fds[endpoint_start + i].revents & POLLIN) != 0) {
       uint64_t notifications;
       if (read(ready_endpoints[i]->event_fd, &notifications,
                sizeof(notifications)) != (ssize_t)sizeof(notifications)) {
@@ -939,6 +1048,14 @@ secbool usb_init(const usb_dev_info_t *device) {
     return secfalse;
   }
   g_usb.initialized = true;
+  uint32_t request_id = g_usb.next_request_id++;
+  if (request_id == 0) {
+    die("Safe 3 USB configuration request ID overflow");
+  }
+  send_record(KIND_CONFIGURE, g_usb.generation, request_id, NULL, 0);
+  fprintf(stderr,
+          "virtual-trezor-safe3: Core USB initialized without attachment; "
+          "waiting for firmware start\n");
   return sectrue;
 }
 

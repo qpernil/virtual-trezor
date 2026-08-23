@@ -41,14 +41,48 @@ Physical Pi validation confirms independent left and right down/up transitions
 and the center-to-both mapping. This stage still leaves UDP USB, lifecycle, and
 timing unchanged.
 
+The completed `make safe3-usb` target preserves the genuine display and input
+paths and replaces Core Unix's UDP transport with the supervisor protocol.
+Core's normal `usb_init`, `usb_webusb_add`, and `usb_hid_add` calls feed an
+opaque Rust-owned `UsbPersonalityBuilder`; `usb_start` finishes the builder and
+publishes schema-1 CBOR. Firmware descriptor discovery uses that same builder
+with raw control-transfer responses, so native construction and genuine EP0
+discovery converge on one validation and serialization path. The Safe 3
+worker keeps only endpoint runtime state in C. It receives direct FunctionFS
+endpoint capabilities, uses one blocking OUT helper per active interface to
+wake Core's pollable syshandles, and writes IN reports directly.
+
+The target produces
+`build/safe3-t3b1-usb/virtual-trezor-safe3-usb` with co-located
+`libdisplay_backends.so` and `libusb_gadget_worker.so`. The helper is shared
+for this target so Core retains its one statically linked Rust runtime. On the
+Pi the supervisor accepted the builder-produced Safe 3 personality, macOS
+enumerated it as `1209:53c1`, and `trezorctl` read genuine T3B1 Core features
+before and after a supervisor reload. This milestone deliberately retains the
+upstream periodic Unix event loop. Its 1 ms sleep/poll cadence produces about
+4-8% idle CPU on one Raspberry Pi 4 core, compared with roughly 0.3% for the
+event-driven Trezor One worker. Replacing that cadence with an event/deadline
+wait is the next timing stage.
+
+Display-HAT KEY3 supplies a worker-owned, spring-loaded disconnect. Press sends
+an empty personality and the supervisor removes the USB generation without
+terminating Core; release sends the complete builder-produced personality and
+binds a new generation without an artificial delay.
+
+Initial configuration is empty because Core deliberately opens USB only after
+its boot/unlock flow. That empty record declares the worker ready without
+creating a generation; the later `usb_start` publishes generation one. KEY3
+transitions are ignored until that first start, so boot-screen button activity
+cannot be mistaken for ejection.
+
 The pinned Core source uses nightly-only Rust language features. During initial
 development every project follows the current stable Rust toolchain; the Safe 3
 build invokes Cargo with an explicit `RUSTC_BOOTSTRAP=1` because the unchanged
-upstream crate still declares those features. The overlay also injects the
-`custom_test_frameworks` crate feature required by current stable for
-upstream's existing test-harness attribute. This is intentionally a rolling
-compiler boundary: later stable regressions will be fixed when encountered
-rather than hidden behind a repository-specific toolchain pin.
+upstream workspace uses the unstable `panic-immediate-abort` Cargo feature and
+its crates declare their required nightly language features themselves. This
+is intentionally a rolling compiler boundary: later stable regressions will be
+fixed when encountered rather than hidden behind a repository-specific
+toolchain pin.
 
 The untouched baseline retains the upstream Unix SDL renderer. On the tested
 Ubuntu system its native build prerequisites are:
@@ -188,23 +222,22 @@ binding, privileged device access, and privilege drop. The worker receives
 only already-open endpoints and declared hardware resources, and owns runtime
 Trezor protocol processing.
 
-The first milestone may expose the main Trezor vendor/WebUSB transport to
-prove enumeration and management workflows. The completed Safe 3 profile
-should match the non-debug interfaces expected from the selected upstream
-model, including any separately described HID function. Debug interfaces must
-remain disabled in the normal profile.
+The current profile exposes the non-debug interfaces expected from T3B1: the
+main Trezor vendor/WebUSB transport and the FIDO HID transport, with two
+interrupt endpoints each. Debug interfaces remain disabled.
 
 The supervisor's typed Microsoft OS 1.0 and WebUSB projection is reusable for
-this worker. Safe 3 discovery must derive its VID/PID, interface ordering,
-WinUSB compatible IDs or successor Microsoft descriptors, interface GUIDs,
-BOS capabilities, and vendor request codes from the selected firmware rather
-than copying the legacy Trezor One byte table.
+this worker. Safe 3's Unix platform receives semantic device and interface
+configuration through Core's genuine USB API. The shared Rust builder derives
+its VID/PID, interface ordering, descriptors, WinUSB compatible ID, and WebUSB
+declaration from those calls rather than copying the legacy Trezor One byte
+table.
 
 Worker startup, readiness, shutdown, supervisor loss, and endpoint recovery
-must use the shared CBOR personality and endpoint-generation protocol rather
-than adding a model-specific privileged control path. A Rust Core worker may
-call the discovery parser directly; only a C firmware boundary needs the small
-callback FFI adapter.
+use the shared CBOR personality and endpoint-generation protocol rather than
+adding a model-specific privileged control path. The C platform adapter calls
+the opaque native builder API; firmware with a real EP0 engine instead uses
+the discovery callback.
 
 ## Idle behavior and timing
 
@@ -247,8 +280,9 @@ cryptography refactor before source lists or ownership are fixed.
 3. **Input complete:** preserve the display-only artifact, add a cumulative
    GPIO target, and verify genuine Core left/right press and release states on
    the Pi. Center maps to both logical buttons.
-4. **USB and lifecycle:** enumerate through the supervisor, handle protocol
-   traffic and reconnects, and isolate state and resources from Trezor One.
+4. **USB and lifecycle complete:** enumerate through the supervisor, handle
+   protocol traffic and reload reconnects, and isolate state and resources
+   from Trezor One.
 5. **Timing:** replace idle polling with the bounded event-driven wait and
    measure idle CPU and firmware deadlines on the Pi.
 6. **Fidelity:** complete the normal Safe 3 USB interface set and validate

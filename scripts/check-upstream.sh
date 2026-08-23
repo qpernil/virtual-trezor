@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
-EXPECTED_COMMIT="725c0c01879329900f08fc453d8fd0fcb4d86090"
-EXPECTED_TAG="legacy/v1.14.1"
+EXPECTED_COMMIT="30be4e8c9488eeab68f994af23b3d9c9b7334266"
+EXPECTED_TAG="core/v2.12.4"
 
 if [[ ! -e "$UPSTREAM_DIR/.git" ]]; then
   echo "Upstream firmware is not initialized; run: make init" >&2
@@ -29,4 +29,3 @@ if [[ -n "$(git -C "$UPSTREAM_DIR" status --porcelain --untracked-files=no)" ]];
 fi
 
 echo "Upstream verified: $EXPECTED_TAG ($EXPECTED_COMMIT)"
-

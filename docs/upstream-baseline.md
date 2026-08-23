@@ -4,9 +4,10 @@
 
 | Item | Value |
 | --- | --- |
-| Date | 2026-08-17 |
-| Upstream tag | `legacy/v1.14.1` |
-| Upstream commit | `725c0c01879329900f08fc453d8fd0fcb4d86090` |
+| Date | 2026-08-23 |
+| Upstream tag | `core/v2.12.4` |
+| Legacy release level | `1.14.1` |
+| Upstream commit | `30be4e8c9488eeab68f994af23b3d9c9b7334266` |
 | Host | macOS arm64 |
 | Compiler | Apple Clang 21 |
 | Python environment | upstream `uv.lock` |
