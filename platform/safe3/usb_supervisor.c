@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -150,6 +151,7 @@ static int g_display_bus_fd = -1;
 static int g_display_control_fd = -1;
 static int g_button_lines_fd = -1;
 static int g_reconnect_button_fd = -1;
+static bool g_reconnect_pressed = false;
 
 static void die_errno(const char *operation) {
   fprintf(stderr, "virtual-trezor-safe3: %s: %s\n", operation,
@@ -385,6 +387,12 @@ __attribute__((constructor)) static void receive_initial_resources(void) {
                    "make Safe 3 button resource nonblocking");
   make_nonblocking(g_reconnect_button_fd,
                    "make Safe 3 reconnect button nonblocking");
+  struct gpio_v2_line_values reconnect_values = {.bits = 0, .mask = 1};
+  if (ioctl(g_reconnect_button_fd, GPIO_V2_LINE_GET_VALUES_IOCTL,
+            &reconnect_values) != 0) {
+    die_errno("read initial Safe 3 reconnect button level");
+  }
+  g_reconnect_pressed = (reconnect_values.bits & 1) != 0;
 }
 
 int safe3_supervisor_display_bus_fd(void) { return g_display_bus_fd; }
@@ -698,22 +706,16 @@ static void unconfigure_until_quiesced(void) {
   }
 }
 
-typedef enum {
-  RECONNECT_TRANSITION_NONE = -1,
-  RECONNECT_TRANSITION_RELEASED = 0,
-  RECONNECT_TRANSITION_PRESSED = 1,
-} reconnect_transition_t;
-
-static reconnect_transition_t take_reconnect_transition(void) {
+static void refresh_reconnect_state(void) {
   for (;;) {
     struct gpio_v2_line_event event;
     ssize_t length = read(g_reconnect_button_fd, &event, sizeof(event));
     if (length == (ssize_t)sizeof(event)) {
       if (event.id == GPIO_V2_LINE_EVENT_RISING_EDGE) {
-        return RECONNECT_TRANSITION_PRESSED;
+        continue;
       }
       if (event.id == GPIO_V2_LINE_EVENT_FALLING_EDGE) {
-        return RECONNECT_TRANSITION_RELEASED;
+        continue;
       }
       continue;
     }
@@ -721,7 +723,7 @@ static reconnect_transition_t take_reconnect_transition(void) {
       continue;
     }
     if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-      return RECONNECT_TRANSITION_NONE;
+      break;
     }
     if (length == 0) {
       die("Safe 3 reconnect button resource closed");
@@ -730,6 +732,17 @@ static reconnect_transition_t take_reconnect_transition(void) {
       die_errno("read Safe 3 reconnect button");
     }
     die("partial Safe 3 reconnect button event");
+  }
+  struct gpio_v2_line_values values = {.bits = 0, .mask = 1};
+  if (ioctl(g_reconnect_button_fd, GPIO_V2_LINE_GET_VALUES_IOCTL, &values) !=
+      0) {
+    die_errno("read Safe 3 reconnect button level");
+  }
+  bool pressed = (values.bits & 1) != 0;
+  if (pressed != g_reconnect_pressed) {
+    g_reconnect_pressed = pressed;
+    fprintf(stderr, "virtual-trezor-safe3: KEY3 pressed=%s\n",
+            pressed ? "true" : "false");
   }
 }
 
@@ -948,25 +961,23 @@ static void service_controller(void) {
     handle_runtime_record(&record);
   }
   if ((fds[reconnect_index].revents & POLLIN) != 0) {
-    reconnect_transition_t transition = take_reconnect_transition();
-    if (transition == RECONNECT_TRANSITION_PRESSED && g_usb.started &&
-        !g_usb.ejected) {
-      fprintf(stderr, "virtual-trezor-safe3: KEY3 USB eject requested\n");
-      unconfigure_until_quiesced();
-      return;
-    }
-    if (transition == RECONNECT_TRANSITION_RELEASED && g_usb.started &&
-        g_usb.ejected) {
-      fprintf(stderr, "virtual-trezor-safe3: KEY3 USB insertion requested\n");
-      if (!configure_until_endpoints(false)) {
-        die("supervisor rejected Safe 3 USB insertion");
-      }
-      g_usb.ejected = false;
-      return;
-    }
+    refresh_reconnect_state();
   }
   if ((fds[reconnect_index].revents & ~(POLLIN)) != 0) {
     die("Safe 3 reconnect button reported an unexpected poll event");
+  }
+  if (g_reconnect_pressed && g_usb.started && !g_usb.ejected) {
+    fprintf(stderr, "virtual-trezor-safe3: KEY3 USB eject requested\n");
+    unconfigure_until_quiesced();
+    return;
+  }
+  if (!g_reconnect_pressed && g_usb.started && g_usb.ejected) {
+    fprintf(stderr, "virtual-trezor-safe3: KEY3 USB insertion requested\n");
+    if (!configure_until_endpoints(false)) {
+      die("supervisor rejected Safe 3 USB insertion");
+    }
+    g_usb.ejected = false;
+    return;
   }
   for (size_t i = 0; i < ready_count; i++) {
     if ((fds[endpoint_start + i].revents & POLLIN) != 0) {
