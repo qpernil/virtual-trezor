@@ -8,8 +8,11 @@ and installing the matching supervisor.
 ```sh
 make check
 make worker
+make safe3-usb
 /opt/usb-gadget-supervisor/usb-gadget-supervisor --check-profile \
   --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor.toml
+/opt/usb-gadget-supervisor/usb-gadget-supervisor --check-profile \
+  --profile /opt/usb-gadget-supervisor/profiles/virtual-trezor-safe3.toml
 ```
 
 Confirm the worker binary has no SDL/X11 dependencies and the selected profile
@@ -18,7 +21,8 @@ arguments. It must not contain copied USB identity or descriptor blobs.
 
 ## USB enumeration and traffic
 
-Start the selected service with a data-capable host connection. Confirm:
+Start the selected service with a data-capable host connection. For Trezor
+One, confirm:
 
 - UDC state becomes `configured`;
 - the host sees the firmware-reported full-speed `1209:53c1`, manufacturer
@@ -33,6 +37,24 @@ Start the selected service with a data-capable host connection. Confirm:
 
 The unsigned Linux worker is not authenticated production firmware, so host
 software may deliberately reject protected wallet operations.
+
+For Safe 3, confirm:
+
+- the host sees full-speed `1209:53c1`, manufacturer `Trezor Company`, product
+  `Trezor Safe 3`, and the firmware-generated serial;
+- the main vendor/WebUSB and FIDO HID interfaces each expose their genuine
+  interrupt OUT and IN endpoints;
+- interface zero advertises the Microsoft OS 1.0 `WINUSB` compatible ID and
+  the BOS includes WebUSB 1.0 without a landing page;
+- `trezorctl` reports `T3B1`/Safe 3 firmware features and normal protocol
+  requests complete; and
+- Trezor Suite in **debug mode** accepts the upstream emulator firmware as
+  genuine and exposes the normal emulator UI workflows.
+
+Suite debug mode is required because it selects Suite's emulator trust path.
+The transport can still be this physical FunctionFS USB gadget; it does not
+need to be the upstream UDP emulator. Production mode may apply production
+firmware-authenticity policy and reject protected operations.
 
 ## Descriptor-capability boundary
 
@@ -105,6 +127,14 @@ configured automatic-lock interval. Confirm that the worker remains at low
 idle CPU and that the firmware enters its lock/screensaver state without an
 external event. This guards the legacy emulator's bounded 10 ms wait contract.
 
+For Safe 3, also observe the worker after initialization has settled. It should
+remain near 0–0.2% of one Pi 4 core (well below 0.5%) rather than the standard
+Unix emulator's roughly 4–8%. A trace must show blocking `ppoll()` wakes for
+control, endpoint, GPIO, or firmware deadlines and no periodic one-millisecond
+sleep loop. Confirm automatic lock and UI timers still expire on schedule,
+then suspend the USB host and confirm suspended time does not advance those
+firmware timers.
+
 On a fresh Windows device instance, confirm that interface zero binds to
 Microsoft's inbox WinUSB driver without installing an INF. Then inspect the BOS
 descriptor and confirm the WebUSB 1.0 platform capability uses vendor request
@@ -121,3 +151,6 @@ not overridden by the profile or virtual controller.
   genuine-device physical isolation.
 - The appliance does not provide physical Trezor security or firmware
   authenticity.
+- Safe 3 is physically validated on ST7789. Its SH1106 SPI/I2C and SSD1306 I2C
+  profiles build and pass schema validation but still require final validation
+  on their physical panels.

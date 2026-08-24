@@ -4,12 +4,12 @@
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#current-status)
 
-`virtual-trezor` runs the upstream Trezor One firmware logic as an
-unprivileged Raspberry Pi USB-gadget worker. The intended device uses the Pi's
-real USB device controller, a physical 128x64 OLED, and two GPIO buttons. It is
-a development simulator, not a hardware wallet: secrets stored on a
-general-purpose Pi do not receive Trezor's physical, extraction, or
-side-channel protections.
+`virtual-trezor` runs genuine upstream Trezor One and Trezor Safe 3 firmware
+logic as independent, unprivileged Raspberry Pi USB-gadget workers. The
+workers use the Pi's real USB device controller, physical displays, and GPIO
+buttons. This is a development simulator, not a hardware wallet: secrets
+stored on a general-purpose Pi do not receive Trezor's physical, extraction,
+or side-channel protections.
 
 Deployment is tested on both 64-bit Ubuntu and 64-bit Raspberry Pi OS. On
 either system, enabling DWC2 in peripheral mode provides the UDC used by the
@@ -28,7 +28,7 @@ Trezor code remains owned and licensed by its respective copyright holders.
 
 Clone the integration repository without recursively initializing every
 dependency in the upstream monorepo, then let the project select only the
-submodules required by Trezor One:
+submodules required by the checked firmware targets:
 
 ```sh
 git clone https://github.com/qpernil/virtual-trezor.git
@@ -39,7 +39,8 @@ make check
 ```
 
 Keep the repositories as sibling directories. The FunctionFS worker must be
-built on Linux with a C toolchain, Rust 1.85.0, and `uv`.
+Built workers require Linux, a C toolchain, the current stable Rust toolchain,
+and `uv`.
 The build obtains the matching protobuf compiler through pinned
 `grpcio-tools==1.81.0` package metadata:
 
@@ -68,14 +69,22 @@ The principal platform milestones now work:
   pinned upstream checkout and passes a startup smoke test on macOS arm64;
 - an aarch64 Raspberry Pi worker builds and runs that firmware behind the USB
   gadget supervisor, replacing UDP, desktop display, and desktop input with
-  FunctionFS, I2C/SPI, and GPIO implementations.
+  FunctionFS, I2C/SPI, and GPIO implementations;
+- the upstream Safe 3 revision B (`T3B1`) Core `2.12.4` firmware builds as a
+  separate worker with its genuine MicroPython/Rust UI, file-backed state,
+  USB personality, and protocol stack;
+- Safe 3 is physically validated on the 240x240 ST7789 HAT with GPIO buttons,
+  macOS USB enumeration, `trezorctl`, and Trezor Suite in debug mode; and
+- Safe 3's Linux virtual-WFI integration reduces stable idle load from roughly
+  4–8% to approximately 0–0.2% of one Pi 4 core without advancing firmware
+  time while suspended or delaying firmware deadlines.
 
 Use the current acceptance checklist in
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
 enumeration, resource confinement, transport, UI, and worker-incarnation
 recovery.
 
-The current worker keeps upstream UI composition and host support while
+The Trezor One worker keeps upstream UI composition and host support while
 replacing the Raspberry Pi hardware boundary:
 
 - retain upstream firmware, protobuf, cryptography, storage, UI composition,
@@ -94,7 +103,7 @@ replacing the Raspberry Pi hardware boundary:
   HAT;
 - do not patch the upstream submodule.
 
-Trezor Suite recognizes the worker, can initialize its simulated state, and
+Trezor Suite recognizes the Trezor One worker, can initialize its simulated state, and
 reaches on-device confirmation workflows. Production Suite reports the
 expected firmware-integrity failure and refuses cryptocurrency transaction
 operations because this worker is not authenticated production firmware.
@@ -216,7 +225,7 @@ result is `build/safe3-t3b1-display/virtual-trezor-safe3-display`, accompanied
 by its shared `libdisplay_backends.so`. Run the unfrozen Core binary with
 `upstream/trezor-firmware/core/src` as its working directory.
 
-The next cumulative target retains that display boundary and adds the Pi HAT's
+The input diagnostic target retains that display boundary and adds the Pi HAT's
 physical buttons through Core's genuine button poller:
 
 ```sh
@@ -229,7 +238,7 @@ press to both buttons. The result is
 `VIRTUAL_TREZOR_BUTTON_TRACE=1` only when diagnosing transitions. The normal
 driver is silent.
 
-The third cumulative target replaces Core's Unix UDP transport with the
+The complete USB target replaces Core's Unix UDP transport with the
 supervisor personality and endpoint protocol:
 
 ```sh
@@ -251,10 +260,17 @@ an empty configuration as its readiness declaration, so an interactive boot or
 unlock screen can keep USB absent indefinitely without holding the supervisor
 startup path or restarting a healthy firmware worker.
 
+Trezor Suite must run in **debug mode** when using this worker. Debug mode
+selects Suite's emulator trust path, so it accepts the genuine upstream
+emulator build as genuine firmware even though the transport is the Pi's
+physical USB gadget rather than the usual UDP emulator transport. Production
+mode intentionally applies production firmware-authenticity policy and may
+reject protected operations.
+
 ## Documentation
 
 - [Architecture and platform boundaries](docs/architecture.md)
-- [Future Trezor Safe 3 worker plan](docs/trezor-safe3-plan.md)
+- [Virtual Trezor Safe 3](docs/trezor-safe3.md)
 - [Upstream baseline](docs/upstream-baseline.md)
 - [Raspberry Pi FunctionFS validation](docs/raspberry-pi-validation.md)
 - [I2C display and oscilloscope plan](docs/i2c-display-plan.md)
