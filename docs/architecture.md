@@ -136,8 +136,9 @@ boot instead of a software event.
 
 Core's hardware scheduler executes `WFI` when no source is ready. The standard
 Unix emulator's `sysevents_poll()` sleeps for one millisecond and repeats its
-source probes, consuming roughly 4–8% of one Pi 4 core. In the supervisor
-build, the exact no-event branch calls
+source probes. The exact unmodified SDL/UDP emulator averages 9.85% of one Pi 4
+core at a settled home screen. In the supervisor build, the exact no-event
+branch calls
 `virtual_trezor_wait_for_interrupt(deadline)`. That function blocks in one
 `ppoll` over the control channel, endpoint notifications, and GPIO edges,
 bounded by Core's own nearest deadline. It then returns to the genuine

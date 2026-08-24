@@ -129,12 +129,19 @@ idle CPU and that the firmware enters its lock/screensaver state without an
 external event. This guards the legacy emulator's bounded 10 ms wait contract.
 
 For Safe 3, also observe the worker after initialization has settled. It should
-remain near 0–0.2% of one Pi 4 core (well below 0.5%) rather than the standard
-Unix emulator's roughly 4–8%. A trace must show blocking `ppoll()` wakes for
-control, endpoint, GPIO, or firmware deadlines and no periodic one-millisecond
-sleep loop. Confirm automatic lock and UI timers still expire on schedule,
-then suspend the USB host and confirm suspended time does not advance those
-firmware timers.
+remain near 0–0.2% of one Pi 4 core (well below 0.5%). A trace must show
+blocking `ppoll()` wakes for control, endpoint, GPIO, or firmware deadlines and
+no periodic one-millisecond sleep loop. Confirm automatic lock and UI timers
+still expire on schedule, then suspend the USB host and confirm suspended time
+does not advance those firmware timers.
+
+For an upstream comparison, build `make safe3-baseline`, run the unmodified
+SDL/UDP artifact from `core/src`, and sample only after it reaches the home
+screen. The validated Pi 4 run used SDL's dummy video driver in a headless SSH
+session and averaged 9.85% of one core over ten two-second `pidstat` samples
+(4.50% user, 5.35% kernel). This confirms the upstream emulator's persistent
+idle load; it is not a single-variable comparison because the upstream
+baseline also retains SDL and UDP.
 
 On a fresh Windows device instance, confirm that interface zero binds to
 Microsoft's inbox WinUSB driver without installing an INF. Then inspect the BOS

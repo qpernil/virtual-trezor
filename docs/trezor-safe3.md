@@ -159,7 +159,7 @@ Core continues to own Trezor message assembly and protocol backpressure.
 Real Core hardware executes `WFI` when no event source is ready. The standard
 Unix emulator's `sysevents_poll()` probes every source and, when none is ready,
 calls `systick_delay_ms(1)` before repeating the complete probe. Waking about a
-thousand times per second uses roughly 4–8% of one Pi 4 core at idle.
+thousand times per second has a measurable idle cost.
 
 The Safe 3 build overlay changes only that no-event branch when
 `VIRTUAL_TREZOR_SUPERVISOR_USB` is enabled. It calls
@@ -182,8 +182,16 @@ which probes and dispatches the event through the normal firmware path. The
 platform wait neither manufactures a firmware event nor consumes a timer
 deadline. Automatic lock, UI timers, transport timeouts, USB lifecycle, and
 button input therefore retain firmware timing semantics without a busy loop.
-Measured stable idle CPU falls from roughly 4–8% to 0–0.2%, with no periodic
-one-millisecond sleeps.
+Measured stable idle CPU is 0–0.2%, with no periodic one-millisecond sleeps.
+
+An exact upstream `make safe3-baseline` build was also measured on the same Pi
+4. It retained upstream SDL/UDP, used SDL's dummy video driver only because the
+SSH session was headless, and ran unmodified `sysevents_poll()`. After reaching
+the home screen, ten two-second `pidstat` samples averaged 9.85% of one core:
+4.50% user time and 5.35% kernel time. The identical artifact measured about
+1.7% on an M-series Mac. This confirms that the persistent idle cost exists in
+Trezor's upstream emulator; because the baseline also contains SDL and UDP, it
+is not a single-variable benchmark of the virtual-WFI hook.
 
 ## Lifecycle
 
