@@ -374,23 +374,42 @@ sudo systemctl stop usb-gadget-supervisor@virtual-trezor-i2c.service
 sudo systemctl start usb-gadget-supervisor@virtual-trezor.service
 ```
 
+To run Safe 3 on the ST7789 HAT instead, stop the current gadget and start its
+independent instance:
+
+```sh
+sudo systemctl stop usb-gadget-supervisor@virtual-trezor.service
+sudo systemctl stop usb-gadget-supervisor@virtual-trezor-i2c.service
+sudo systemctl start usb-gadget-supervisor@virtual-trezor-safe3.service
+systemctl --no-pager --full status \
+  usb-gadget-supervisor@virtual-trezor-safe3.service
+```
+
+Substitute the explicitly named Safe 3 SH1106 or SSD1306 instance when using
+one of those profiles. Only one gadget instance may claim the Pi's UDC.
+
 If using `systemctl enable`, enable only the profile that should claim the UDC
 at boot, and ensure Virtual YubiKey or other gadget instances are disabled.
 
-The UDC should reach `configured` after attachment to the host. Confirm that
-`trezorctl` or the pinned `trezorlib` reports model `1` and firmware `1.14.1`
-before testing Trezor Suite. The firmware-integrity warning from Suite is
-expected because this Linux worker is not an official signed embedded image.
-Production Suite may refuse transaction operations after that failed check;
-this is an intentional safety boundary, not a transport failure. Use testnet
-or regtest with development tooling for signing-flow experiments, and never
-place a valuable seed in the worker.
+The UDC should reach `configured` after attachment to the host. For Trezor
+One, confirm that `trezorctl` or the pinned `trezorlib` reports model `1` and
+firmware `1.14.1`.
+
+For Safe 3, confirm that the host sees the `T3B1`/Safe 3 features and then run
+Trezor Suite in **debug mode**. Debug mode selects Suite's emulator trust path,
+so the genuine upstream emulator firmware is accepted as genuine even though
+it reaches Suite through the Pi's physical USB gadget rather than UDP. Normal
+production mode may reject protected operations under its production
+firmware-authenticity policy; that is not a USB transport failure. Debug mode
+does not turn the Pi or its file-backed state into secure hardware. Use only
+disposable state and test funds.
 
 Leave the device on its home screen without host traffic for the configured
-automatic-lock interval. The worker should remain at low idle CPU while the
-firmware still enters its lock/screensaver state on schedule. USB, GPIO, and
-supervisor events wake the worker early; otherwise its main loop returns at the
-upstream emulator's normal 10 ms deadline.
+automatic-lock interval. Both workers should remain at low idle CPU while the
+firmware still enters its lock/screensaver state on schedule. Trezor One uses
+the legacy emulator's bounded 10 ms deadline. Safe 3 uses virtual WFI and
+should settle around 0–0.2% of one Pi 4 core; USB, GPIO, endpoint, or firmware
+timer events wake it without a periodic one-millisecond polling loop.
 
 Use the HAT joystick on GPIO5/GPIO26/GPIO13 or the remote virtual-display
 client for No/Yes/both input. Stop the service before selecting another
@@ -403,3 +422,7 @@ sudo systemctl stop usb-gadget-supervisor@virtual-trezor.service
 Do not delete `/var/lib/virtual-trezor` casually: it contains the worker's
 simulated persistent state. That state is ordinary software-accessible data,
 not hardware-protected storage.
+
+Safe 3 state is independent at `/var/lib/virtual-trezor-safe3`; the same
+warning applies to it. All Safe 3 display variants deliberately share that
+directory.

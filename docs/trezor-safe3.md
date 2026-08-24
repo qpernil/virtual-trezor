@@ -1,0 +1,198 @@
+# Virtual Trezor Safe 3
+
+## Current status
+
+The Safe 3 revision B (`T3B1`) worker is implemented and runs genuine upstream
+Core firmware logic on 64-bit Linux. It is independent of the legacy Trezor One
+worker and produces:
+
+```text
+build/safe3-t3b1-usb/virtual-trezor-safe3-usb
+```
+
+The worker combines upstream Core, MicroPython, Rust UI and cryptography with
+project-owned Linux adaptations for display, buttons, USB, secure emulator
+randomness and idle waiting. On Raspberry Pi 4 it has been validated with the
+ST7789 display, physical buttons, the supervisor, macOS USB enumeration,
+`trezorctl`, and Trezor Suite in debug mode. At stable idle it consumes
+approximately 0–0.2% of one core.
+
+This remains a development simulator, not a hardware wallet. Its state and
+secrets are ordinary files on a general-purpose computer and do not receive
+Safe 3's physical, extraction or side-channel protections.
+
+### Trezor Suite debug mode
+
+Run Trezor Suite in **debug mode** for Safe 3 emulator work. Debug mode selects
+Suite's emulator trust path, allowing the genuine upstream emulator firmware
+to pass Suite's authenticity check. This remains true when that firmware is
+transported through the Pi's physical FunctionFS USB gadget rather than the
+upstream emulator's usual UDP transport.
+
+Without debug mode, Suite applies its production-firmware trust policy and may
+report the emulator image as non-genuine or refuse protected operations. Debug
+mode changes Suite's acceptance policy; it does not make the Pi, file-backed
+state, or virtual secure element equivalent to production hardware. The Suite
+UI should continue to identify the session as an emulator/development context.
+
+## Build targets
+
+Safe 3 has four explicit build stages. They use separate output directories
+and do not change the Trezor One artifact.
+
+| Target | Purpose |
+| --- | --- |
+| `make safe3-baseline` | Unmodified upstream SDL display/input and UDP USB emulator |
+| `make safe3-display` | Project display driver, no SDL, inert buttons, upstream UDP USB |
+| `make safe3-input` | Display stage plus physical GPIO buttons |
+| `make safe3-usb` | Complete Pi worker with supervisor USB and virtual WFI |
+
+The complete worker requires Linux, `libjpeg-dev`, the LLVM resource headers
+matching the host compiler, the repository's pinned Python environment, and
+the current stable Rust toolchain:
+
+```sh
+make init
+make check
+make safe3-usb
+```
+
+The upstream Core workspace currently uses nightly-only language and Cargo
+features. The build therefore applies the narrowly scoped
+`RUSTC_BOOTSTRAP=1` environment setting while still using the global stable
+toolchain. It records the upstream revision and Rust version beside each
+artifact.
+
+Two checked project overlays are applied only while a Safe 3 target builds and
+are always reversed afterward:
+
+- `safe3-headless-display.patch` selects the project display, button and USB
+  implementations, removes SDL from headless targets, links the shared native
+  libraries, and installs the virtual-WFI hook.
+- `safe3-secure-random.patch` replaces deterministic emulator reseeding with
+  the secure Unix RNG path backed by `/dev/urandom`.
+
+The pinned upstream submodule must be clean before and after every build.
+
+## Firmware and state
+
+The worker runs upstream model `T3B1` from Core release `2.12.4`. Core's
+file-backed Unix flash implementation remains genuine and is rooted through
+`TREZOR_PROFILE_DIR` at the profile's state directory:
+
+```text
+/var/lib/virtual-trezor-safe3
+```
+
+Trezor One uses a different state directory. All Safe 3 display-profile
+variants deliberately share the Safe 3 directory so changing only the physical
+panel does not create a different wallet. Only one variant may run at a time.
+
+Core can remain in its own boot or PIN flow before opening USB. The worker
+therefore first publishes an empty personality as a readiness declaration. The
+supervisor stays healthy without attaching a USB device until genuine Core
+calls `usb_start()` and publishes the real personality.
+
+## Display contract
+
+Core composes a row-major 128×64 `Mono8` framebuffer: one intensity byte per
+pixel with a stride of 128 bytes. The worker sends all 8192 bytes unchanged to
+`display-backends`. It does not threshold, pack, dither or convert the frame.
+
+Safe 3 supports the same four physical backends as Trezor One:
+
+| Backend | Profile | Conversion owned by `display-backends` |
+| --- | --- | --- |
+| ST7789 SPI | `virtual-trezor-safe3.toml` | Mono8 to RGB565, scaled to 240×120 and centered |
+| SH1106 SPI | `virtual-trezor-safe3-sh1106-spi.toml` | Thresholded and packed into native 1-bit pages |
+| SH1106 I²C | `virtual-trezor-safe3-sh1106-i2c.toml` | Thresholded and packed into native 1-bit pages |
+| SSD1306 I²C | `virtual-trezor-safe3-ssd1306-i2c.toml` | Thresholded and packed into native 1-bit pages |
+
+The named display-bus resource selects the backend; Safe 3 does not parse a
+display option from Core's Python command line. ST7789 is physically validated.
+The three monochrome profile variants build and pass supervisor schema checks,
+but still require final physical Safe 3 validation on their respective panels.
+
+## Buttons and disconnect control
+
+Core's genuine `button_poll.c` state machines retain ownership of per-task
+press/release history. The project driver supplies only current logical GPIO
+state:
+
+- GPIO5: left
+- GPIO26: right
+- GPIO13: joystick center, mapped to both logical buttons
+- GPIO16 / display-HAT KEY3: spring-loaded USB eject and insertion
+
+All inputs are active-low with pull-ups and both-edge detection. The supervisor
+claims the exact GPIO groups and passes line-request handles; the worker never
+opens the GPIO chip or chooses additional lines.
+
+Holding KEY3 publishes an empty USB personality and removes the current USB
+generation while Core and its display remain alive. Releasing KEY3 republishes
+the complete genuine personality and creates a fresh generation immediately.
+Old host handles no longer transfer after that replacement.
+
+## USB personality and endpoints
+
+Core's normal `usb_init`, `usb_webusb_add`, `usb_hid_add` and `usb_start` calls
+populate the shared Rust `UsbPersonalityBuilder`. The resulting typed CBOR
+personality describes the genuine Safe 3 device and is validated by the
+supervisor before ConfigFS or FunctionFS is configured.
+
+The current non-debug personality enumerates as `1209:53c1` and contains:
+
+- the main Trezor vendor/WebUSB interface;
+- the FIDO HID interface;
+- two interrupt endpoints per interface;
+- a Microsoft OS 1.0 `WINUSB` compatible ID for the vendor interface; and
+- a WebUSB 1.0 BOS capability without a landing page.
+
+The supervisor retains privileged `ep0` ownership. Direct FunctionFS data
+endpoint handles are transferred to the unprivileged worker. Each blocking
+endpoint direction has one helper thread and one single-packet handoff slot;
+there is no socket framing, acknowledgement protocol or extra USB-level queue.
+Core continues to own Trezor message assembly and protocol backpressure.
+
+## Virtual wait for interrupt
+
+Real Core hardware executes `WFI` when no event source is ready. The standard
+Unix emulator instead probes every source, sleeps one millisecond, and repeats.
+That produced roughly 4–8% idle CPU on one Pi 4 core.
+
+The supervisor worker replaces only that idle delay with a virtual WFI. One
+blocking `ppoll()` waits across:
+
+- the supervisor control and lifecycle channel;
+- endpoint notification `eventfd`s;
+- the KEY3 reconnect line;
+- normal button GPIO edge events; and
+- Core's nearest firmware timer deadline.
+
+After wakeup, readiness still flows through Core's genuine `sysevents`
+dispatcher. Automatic lock, UI timers, transport timeouts, USB lifecycle and
+button input therefore retain firmware timing semantics without a busy loop.
+Measured stable idle CPU after this change is 0–0.2%, with no periodic
+one-millisecond sleeps.
+
+## Lifecycle
+
+`ENABLE`, `DISABLE`, `SUSPEND`, `RESUME`, unbind and replacement-generation
+events reach the worker through the supervisor control channel and wake virtual
+WFI. Endpoint readiness is gated while USB is disabled or suspended. The
+worker and Core state survive ordinary USB generation replacement, including
+KEY3 eject/insert.
+
+Safe 3 leaves panel policy with genuine Core: USB suspend and KEY3 ejection do
+not directly turn off the display. A clean worker shutdown explicitly
+deinitializes the selected backend and disables its display or backlight.
+
+## Known limitations and later work
+
+- Production Suite may enforce firmware authenticity. Debug mode is required
+  for the intended emulator workflows.
+- Safe 3 recovery and every protected signing workflow are not exhaustively
+  validated; use only disposable test state.
+- The SH1106 and SSD1306 Safe 3 profiles still need physical-panel validation.
+- Safe 5 or another touchscreen model, SDL touch mirroring, haptics, battery,
+  Bluetooth and secure-element fidelity are separate later projects.

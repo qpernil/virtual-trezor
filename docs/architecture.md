@@ -151,29 +151,30 @@ support archive is constructed only from `setup.o`, `memory.o`, `timer.o`, and
 symbols. Controller mechanics come from the Rust static library. Neither
 upstream datagram implementation nor an SDL object is present in the worker.
 
-## Milestones
+## Implementation status
 
-1. **Complete:** build and run the unmodified upstream SDL/UDP emulator as a
-   baseline.
-2. **In progress:** build the Pi worker with FunctionFS USB. Real
-   USB enumeration, `Features`, multi-packet protocol traffic, reconnects, and
-   interactive confirmation are proven. The worker now discovers WinUSB
-   association descriptors and a WebUSB BOS capability directly from the
-   upstream legacy firmware rather than copying them into TOML. The worker
-   preserves firmware release `1.00`; any stale Windows result for an earlier
-   gadget with the same identity must be cleared on the host. Firmware
-   discovery restores both the main vendor interface and the U2F HID
-   interface; full Suite workflows remain.
-3. **Complete:** the genuine framebuffer is sent to a selectable SSD1306 or
-   SH1106 I2C stream, with GPIO-backed buttons. Unit, full-worker, target
-   electrical, second-Pi rendering, interactive-button, and 400 kHz
-   oscilloscope validation pass.
-4. **In progress:** the same SH1106 stream has a factory-HAT SPI transport;
-   its ARM64 build, supervisor resource handoff, spidev configuration, GPIO,
-   and USB startup pass. Physical OLED/button-HAT validation remains.
+The Trezor One worker is complete for the current integration scope. It runs
+the genuine legacy `1.14.1` firmware with supervisor-managed FunctionFS USB,
+firmware-discovered WinUSB/WebUSB descriptors, direct endpoint handles,
+file-backed flash, selectable I2C/SPI displays, GPIO buttons, reconnect, and
+USB suspend/resume. Its SH1106 and SSD1306 paths have been exercised on the Pi
+and through the second-Pi SDL viewer; ST7789 is physically validated.
 
-The detailed display stages and the Pi 4 controller-clock finding are in
-[`i2c-display-plan.md`](i2c-display-plan.md).
+The separate Safe 3 revision B worker is also complete for the current
+integration scope. It runs upstream Core `2.12.4` with its genuine
+MicroPython/Rust UI, protocol and file-backed storage. Core constructs the
+typed USB personality, publishes an empty personality until `usb_start()`, and
+can remove/reinsert the gadget without restarting the worker. Its 128x64
+`Mono8` framebuffer reaches `display-backends` unchanged, GPIO buttons feed
+Core's genuine poller, secure randomness comes from the Unix RNG path, and
+virtual WFI keeps idle CPU near zero. The ST7789 configuration is physically
+validated with `trezorctl` and Trezor Suite in debug mode. The Safe 3 SH1106
+and SSD1306 variants build and pass profile validation but still need final
+physical-panel validation.
+
+The detailed Trezor One display stages and the Pi 4 controller-clock finding
+are in [`i2c-display-plan.md`](i2c-display-plan.md). Safe 3's complete build,
+runtime and validation contract is in [`trezor-safe3.md`](trezor-safe3.md).
 
 ## Upstream policy
 
