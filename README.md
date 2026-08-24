@@ -272,6 +272,9 @@ release republishes the genuine Core personality immediately. Core first sends
 an empty configuration as its readiness declaration, so an interactive boot or
 unlock screen can keep USB absent indefinitely without holding the supervisor
 startup path or restarting a healthy firmware worker.
+The worker samples KEY3's current logical GPIO level and drains edge events only
+as wakeups, so rapid transitions converge to the physical state rather than
+replaying stale press/release history.
 
 Trezor Suite must run in **debug mode** when using this worker. Debug mode
 selects Suite's emulator trust path, so it accepts the genuine upstream

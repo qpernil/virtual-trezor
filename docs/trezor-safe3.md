@@ -153,6 +153,10 @@ Holding KEY3 publishes an empty USB personality and removes the current USB
 generation while Core and its display remain alive. Releasing KEY3 republishes
 the complete genuine personality and creates a fresh generation immediately.
 Handles associated with the retired generation cannot transfer.
+The worker samples the active-low line when it receives the resource and after
+draining every group of GPIO events. Eject/insert therefore follows the latest
+physical level; queued transitions are not treated as commands that must all be
+replayed.
 
 ## USB personality and endpoints
 
