@@ -129,7 +129,8 @@ sudo install -o root -g root -m 0644 /tmp/virtual-trezor-st7789.toml \
   /opt/usb-gadget-supervisor/profiles/virtual-trezor-st7789.toml
 ```
 
-Install the independent Safe 3 profile after building `make safe3-usb`:
+Install the independent Safe 3 profile after building `make safe3-usb`. The
+default file selects ST7789 SPI:
 
 ```sh
 cp profiles/virtual-trezor-safe3.toml /tmp/virtual-trezor-safe3.toml
@@ -140,7 +141,13 @@ sudo install -o root -g root -m 0644 /tmp/virtual-trezor-safe3.toml \
 
 Set its command to the Safe 3 USB artifact, set its script argument to the
 absolute `upstream/trezor-firmware/core/src/main.py` path, and use a distinct
-state directory. Before Core starts, the worker exports that directory through
+state directory from Trezor One. To use another controller, install the
+corresponding `virtual-trezor-safe3-{sh1106-spi,sh1106-i2c,ssd1306-i2c}.toml`
+profile instead. The Safe 3 variants deliberately share
+`/var/lib/virtual-trezor-safe3`, so changing only the physical display does not
+create a new wallet. Run only one Safe 3 instance at a time.
+
+Before Core starts, the worker exports that directory through
 Core's standard `TREZOR_PROFILE_DIR` interface and changes into it. Core's
 unchanged Unix flash emulator consequently creates `trezor.flash` there; the
 absolute script path supplies Core's source import root.
@@ -152,10 +159,13 @@ The resulting choices are:
 | `virtual-trezor` | Direct SH1106 over SPI0 | none; `sh1106-spi` is the default |
 | `virtual-trezor-i2c` | SH1106 over I2C1, including the second-Pi viewer | `--display=sh1106-i2c` |
 | `virtual-trezor-st7789` | Direct 240x240 ST7789 LCD over SPI0 | `--display=st7789-spi` |
-| `virtual-trezor-safe3` | Direct 240x240 ST7789 LCD over SPI0 | absolute Core `src/main.py` path |
+| `virtual-trezor-safe3` | Safe 3 on 240x240 ST7789 over SPI0 | `display-st7789-spi` resource |
+| `virtual-trezor-safe3-sh1106-spi` | Safe 3 on 128x64 SH1106 over SPI0 | `display-sh1106-spi` resource |
+| `virtual-trezor-safe3-sh1106-i2c` | Safe 3 on 128x64 SH1106 over I2C1 | `display-sh1106-i2c` resource |
+| `virtual-trezor-safe3-ssd1306-i2c` | Safe 3 on 128x64 SSD1306 over I2C1 | `display-ssd1306-i2c` resource |
 
-The default SPI profile declares `/dev/spidev0.0`; the I2C profile declares
-`/dev/i2c-1`. Both also declare one display-control output group and one button
+The SPI profiles declare `/dev/spidev0.0`; the I2C profiles declare
+`/dev/i2c-1`. Each also declares one display-control output group and one button
 input/event group on `/dev/gpiochip0`. The supervisor opens the bus, claims the
 exact GPIO offsets, and passes the three resulting handles before dropping
 privileges. It does not pass the GPIO-chip descriptor, so the worker can neither
@@ -166,8 +176,9 @@ Safe 3 initially declares readiness with an empty USB personality. Genuine Core
 may therefore remain in an interactive boot or unlock flow indefinitely before
 Python opens USB, while the supervisor and worker remain healthy.
 
-The worker defaults to `sh1106-spi`. Override it in an alternate profile when
-needed; do not rely on I2C address probing, because both I2C controllers
+The Trezor One worker defaults to `sh1106-spi` and accepts a `--display`
+override. Safe 3 selects the same four choices from the named display resource
+in its profile. Do not rely on I2C address probing, because both I2C controllers
 normally use `0x3c`:
 
 ```toml
@@ -175,8 +186,10 @@ normally use `0x3c`:
 arguments = ["--display=sh1106-i2c"]
 ```
 
-The available override values are `ssd1306-i2c`, `sh1106-i2c`,
-`sh1106-spi`, and `st7789-spi`.
+The common backend names are `ssd1306-i2c`, `sh1106-i2c`, `sh1106-spi`, and
+`st7789-spi`. Both firmware workers submit their native framebuffer unchanged;
+`display-backends` owns thresholding, packing, conversion, scaling, and panel
+placement.
 The SH1106 profiles place GPIO25 reset in the output handle, with SPI also
 placing GPIO24 Data/Command first. The worker pulses reset before initialization
 and SPI0 CE0 supplies chip select. The button handle contains active-low GPIO5,

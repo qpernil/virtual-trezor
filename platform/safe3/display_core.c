@@ -14,6 +14,7 @@
 
 #include "display_backends.h"
 #include "display_resources.h"
+#include "worker_config.h"
 
 #define SAFE3_FRAME_WIDTH 128U
 #define SAFE3_FRAME_HEIGHT 64U
@@ -30,6 +31,20 @@ typedef struct {
 } safe3_display_driver_t;
 
 static safe3_display_driver_t g_display;
+
+static uint32_t display_backend_kind(void) {
+  switch (worker_display_backend()) {
+    case DISPLAY_SSD1306_I2C:
+      return DISPLAY_BACKENDS_SSD1306_I2C;
+    case DISPLAY_SH1106_I2C:
+      return DISPLAY_BACKENDS_SH1106_I2C;
+    case DISPLAY_SH1106_SPI:
+      return DISPLAY_BACKENDS_SH1106_SPI;
+    case DISPLAY_ST7789_SPI:
+      return DISPLAY_BACKENDS_ST7789_SPI;
+  }
+  return UINT32_MAX;
+}
 
 static void display_shutdown_at_exit(void) {
   display_deinit(DISPLAY_RESET_CONTENT);
@@ -57,14 +72,22 @@ bool display_init(display_content_mode_t mode) {
 #endif
   gfx_bitblt_init();
 
+  if (!worker_display_backend_selected()) {
+    char error[128];
+    if (!worker_display_select_backend("st7789-spi", error, sizeof(error))) {
+      fprintf(stderr, "virtual-trezor-safe3: %s\n", error);
+      gfx_bitblt_deinit();
+      return false;
+    }
+  }
+
   safe3_display_resources_t resources;
   if (!safe3_display_resources_acquire(&resources)) {
     gfx_bitblt_deinit();
     return false;
   }
-  int error = display_backends_create(DISPLAY_BACKENDS_ST7789_SPI,
-                                      resources.bus_fd, resources.control_fd,
-                                      &g_display.display);
+  int error = display_backends_create(display_backend_kind(), resources.bus_fd,
+                                      resources.control_fd, &g_display.display);
   safe3_display_resources_release(&resources);
   if (error != 0) {
     fprintf(stderr, "virtual-trezor-safe3: display initialization failed: %s\n",
@@ -74,6 +97,8 @@ bool display_init(display_content_mode_t mode) {
   }
 
   g_display.initialized = true;
+  fprintf(stderr, "virtual-trezor-safe3: %s display ready\n",
+          worker_display_backend_name());
   return true;
 }
 

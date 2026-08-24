@@ -15,6 +15,9 @@ typedef enum {
 
 bool worker_config_parse(int argc, char *const argv[], char *error,
                          size_t error_size);
+bool worker_display_select_backend(const char *value, char *error,
+                                   size_t error_size);
+bool worker_display_backend_selected(void);
 display_backend_t worker_display_backend(void);
 bool worker_display_is_sh1106(void);
 bool worker_display_is_st7789(void);

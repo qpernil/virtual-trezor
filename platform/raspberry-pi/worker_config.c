@@ -6,22 +6,28 @@
 #include <string.h>
 
 static display_backend_t display_backend = DISPLAY_SH1106_SPI;
+static bool display_backend_selected = false;
 
-static bool select_backend(const char *value, char *error, size_t error_size) {
+bool worker_display_select_backend(const char *value, char *error,
+                                   size_t error_size) {
   if (strcmp(value, "ssd1306-i2c") == 0) {
     display_backend = DISPLAY_SSD1306_I2C;
+    display_backend_selected = true;
     return true;
   }
   if (strcmp(value, "sh1106-i2c") == 0) {
     display_backend = DISPLAY_SH1106_I2C;
+    display_backend_selected = true;
     return true;
   }
   if (strcmp(value, "sh1106-spi") == 0) {
     display_backend = DISPLAY_SH1106_SPI;
+    display_backend_selected = true;
     return true;
   }
   if (strcmp(value, "st7789-spi") == 0) {
     display_backend = DISPLAY_ST7789_SPI;
+    display_backend_selected = true;
     return true;
   }
   snprintf(error, error_size, "unsupported --display backend: %s", value);
@@ -32,10 +38,12 @@ static bool select_legacy_i2c_display(const char *value, char *error,
                                       size_t error_size) {
   if (strcmp(value, "ssd1306") == 0) {
     display_backend = DISPLAY_SSD1306_I2C;
+    display_backend_selected = true;
     return true;
   }
   if (strcmp(value, "sh1106") == 0) {
     display_backend = DISPLAY_SH1106_I2C;
+    display_backend_selected = true;
     return true;
   }
   snprintf(error, error_size,
@@ -46,6 +54,7 @@ static bool select_legacy_i2c_display(const char *value, char *error,
 bool worker_config_parse(int argc, char *const argv[], char *error,
                          size_t error_size) {
   display_backend = DISPLAY_SH1106_SPI;
+  display_backend_selected = false;
   bool display_seen = false;
 
   for (int index = 1; index < argc; ++index) {
@@ -83,11 +92,18 @@ bool worker_config_parse(int argc, char *const argv[], char *error,
     display_seen = true;
     if (legacy_i2c
             ? !select_legacy_i2c_display(value, error, error_size)
-            : !select_backend(value, error, error_size)) {
+            : !worker_display_select_backend(value, error, error_size)) {
       return false;
     }
   }
+  if (!display_seen) {
+    display_backend_selected = true;
+  }
   return true;
+}
+
+bool worker_display_backend_selected(void) {
+  return display_backend_selected;
 }
 
 display_backend_t worker_display_backend(void) { return display_backend; }

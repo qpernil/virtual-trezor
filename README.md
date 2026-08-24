@@ -206,7 +206,10 @@ make safe3-display
 
 This target removes SDL entirely. Its project-owned Core display driver sends
 the genuine 128x64 `Mono8` framebuffer unchanged to `display-backends`; the
-selected backend alone converts and scales it for the physical panel. Button
+selected backend alone converts and scales it for the physical panel. The USB
+worker supports the same `ssd1306-i2c`, `sh1106-i2c`, `sh1106-spi`, and
+`st7789-spi` choices as the Trezor One worker; the supervisor resource name
+selects the matching backend. Button
 input is deliberately inert in this stage, while USB remains on the upstream
 UDP transport and the upstream lifecycle and timing remain unchanged. The
 result is `build/safe3-t3b1-display/virtual-trezor-safe3-display`, accompanied
@@ -238,14 +241,15 @@ shared Rust `UsbPersonalityBuilder`; `usb_start` finishes and publishes the
 same typed personality used by legacy firmware discovery. The resulting
 `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` is accompanied by
 `libdisplay_backends.so` and `libusb_gadget_worker.so`. The checked-in
-`profiles/virtual-trezor-safe3.toml` keeps Safe 3 state and FunctionFS mounts
+`profiles/virtual-trezor-safe3.toml` is the ST7789 default; the adjacent named
+Safe 3 profiles select either SH1106 transport or SSD1306 while retaining the
+same firmware state directory. All keep Safe 3 state and FunctionFS mounts
 separate from Trezor One. Holding display-HAT KEY3 publishes an empty USB
 personality, so the powered worker remains absent from USB until release;
 release republishes the genuine Core personality immediately. Core first sends
 an empty configuration as its readiness declaration, so an interactive boot or
 unlock screen can keep USB absent indefinitely without holding the supervisor
-startup path or restarting a healthy firmware worker. Additional display-
-controller selection and the event-driven timing stage remain deferred.
+startup path or restarting a healthy firmware worker.
 
 ## Documentation
 

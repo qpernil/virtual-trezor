@@ -90,6 +90,12 @@ int main(void) {
   assert(!worker_config_parse(2, unknown_arguments, error, sizeof(error)));
   assert(strstr(error, "unknown worker argument") != NULL);
 
+  assert(worker_display_select_backend("ssd1306-i2c", error, sizeof(error)));
+  assert(worker_display_backend_selected());
+  assert(worker_display_backend() == DISPLAY_SSD1306_I2C);
+  assert(!worker_display_select_backend("unknown", error, sizeof(error)));
+  assert(strstr(error, "unsupported --display backend") != NULL);
+
   puts("Button mapping and display option tests passed.");
   return 0;
 }

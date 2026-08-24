@@ -12,7 +12,7 @@ runtime_directory = "/run/virtual-trezor-safe3"
 
 [[resources]]
 type = "character-device"
-name = "display-spi"
+name = "display-st7789-spi"
 path = "/dev/spidev0.0"
 access = "read-write"
 
