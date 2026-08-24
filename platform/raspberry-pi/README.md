@@ -7,9 +7,9 @@ The worker compiles neither upstream datagram transport nor the upstream SDL
 display/button implementations. It supplies the complete Raspberry Pi USB,
 display, and button boundary while leaving firmware UI composition unchanged.
 
-The current replacement surface is:
+The platform surface is:
 
-| Replacement | Responsibility |
+| Component | Responsibility |
 | --- | --- |
 | `usb_functionfs.c` | `usbInit`, `usbPoll`, `waitAndProcessUSBRequests`, `usbTiny`, `usbFlush`, and `usbReconnect`; virtual controller, supervisor records, direct FunctionFS endpoints, and liveness |
 | `buttons_gpio.c` | `buttonRead`; logical No/Yes/center values and edge events through one inherited input-line handle |

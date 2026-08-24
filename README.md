@@ -38,9 +38,8 @@ make init
 make check
 ```
 
-Keep the repositories as sibling directories. The FunctionFS worker must be
-Built workers require Linux, a C toolchain, the current stable Rust toolchain,
-and `uv`.
+Keep the repositories as sibling directories. Built workers require Linux, a
+C toolchain, the current stable Rust toolchain, and `uv`.
 The build obtains the matching protobuf compiler through pinned
 `grpcio-tools==1.81.0` package metadata:
 
@@ -63,7 +62,7 @@ installation, profile customization, and USB gadget startup.
 
 ## Current status
 
-The principal platform milestones now work:
+The supported configurations are:
 
 - the official Trezor One `legacy/v1.14.1` emulator builds from an unmodified,
   pinned upstream checkout and passes a startup smoke test on macOS arm64;
@@ -77,7 +76,9 @@ The principal platform milestones now work:
   macOS USB enumeration, `trezorctl`, and Trezor Suite in debug mode; and
 - Safe 3's Linux virtual-WFI integration reduces stable idle load from roughly
   4–8% to approximately 0–0.2% of one Pi 4 core without advancing firmware
-  time while suspended or delaying firmware deadlines.
+  time while suspended or delaying firmware deadlines: instead of polling
+  every millisecond, it blocks until USB/control activity, endpoint readiness,
+  a GPIO edge, or the remaining time on Core's virtual timer expires.
 
 Use the current acceptance checklist in
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
@@ -108,19 +109,19 @@ reaches on-device confirmation workflows. Production Suite reports the
 expected firmware-integrity failure and refuses cryptocurrency transaction
 operations because this worker is not authenticated production firmware.
 Recovery remains unvalidated.
-The current firmware configuration exposes only the main Trezor vendor
-interface and the U2F HID interface, with two interrupt endpoints each. USB
-identity is no longer copied into the TOML profiles. At startup a shared discovery parser
-asks the genuine legacy control engine for its device, configuration, string,
+The Trezor One firmware configuration exposes the main Trezor vendor interface
+and the U2F HID interface, with two interrupt endpoints each. The TOML profiles
+contain no USB identity. At startup a shared discovery parser asks the genuine
+legacy control engine for its device, configuration, string,
 Microsoft OS 1.0, and WebUSB descriptors. It serializes the resulting typed
 personality as CBOR; the supervisor validates and projects it into ConfigFS and
 FunctionFS. Thus interface zero receives the firmware's `WINUSB` compatible ID
 and interface GUID, while its BOS reports WebUSB 1.0 without a landing page.
 WinUSB supplies the Windows driver; WebUSB separately enables permissioned
 browser discovery and access. The worker reports the firmware's device release
-`1.00` without a virtual override. Windows may retain a cached result from an
-earlier gadget with the same identity; clearing that host-side cache is an
-operational concern rather than part of descriptor discovery.
+`1.00` without a virtual override. Windows caches enumeration results by device
+identity; clearing that host-side cache is an operational concern rather than
+part of descriptor discovery.
 Worker-requested reconnects preserve the firmware process while the supervisor
 replaces the complete USB generation and guarantees at least 250 ms detached
 before rebinding.
@@ -181,7 +182,7 @@ make init
 make check
 ```
 
-This does not recursively initialize dependencies for newer Trezor models.
+This does not recursively initialize dependencies for other Trezor models.
 The linked firmware dependencies are nanopb, QR-Code-generator, and
 secp256k1-zkp. The retained emulator setup object also includes a libopencm3
 flash header, without linking that library. The monorepo's locked `uv`

@@ -40,8 +40,7 @@ driver.
 
 ## Display transaction model
 
-The project backend now provides the emulator-build symbols that upstream
-expects:
+The project backend provides the emulator-build symbols that upstream expects:
 
 - `oledInit` receives the required supervisor-opened I2C controller resource
   and emits the selected controller's initialization command stream;

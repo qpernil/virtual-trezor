@@ -131,7 +131,7 @@ opens the GPIO chip or chooses additional lines.
 Holding KEY3 publishes an empty USB personality and removes the current USB
 generation while Core and its display remain alive. Releasing KEY3 republishes
 the complete genuine personality and creates a fresh generation immediately.
-Old host handles no longer transfer after that replacement.
+Handles associated with the retired generation cannot transfer.
 
 ## USB personality and endpoints
 
@@ -157,11 +157,19 @@ Core continues to own Trezor message assembly and protocol backpressure.
 ## Virtual wait for interrupt
 
 Real Core hardware executes `WFI` when no event source is ready. The standard
-Unix emulator instead probes every source, sleeps one millisecond, and repeats.
-That produced roughly 4–8% idle CPU on one Pi 4 core.
+Unix emulator's `sysevents_poll()` probes every source and, when none is ready,
+calls `systick_delay_ms(1)` before repeating the complete probe. Waking about a
+thousand times per second uses roughly 4–8% of one Pi 4 core at idle.
 
-The supervisor worker replaces only that idle delay with a virtual WFI. One
-blocking `ppoll()` waits across:
+The Safe 3 build overlay changes only that no-event branch when
+`VIRTUAL_TREZOR_SUPERVISOR_USB` is enabled. It calls
+`virtual_trezor_wait_for_interrupt(deadline)`, passing the deadline already
+computed by Core. The Linux implementation calculates the remaining firmware
+time and performs one blocking `ppoll()`. In practical terms, the worker does
+not wake every millisecond: it remains blocked until USB control or lifecycle
+traffic arrives, an endpoint becomes ready, a button GPIO changes, KEY3
+changes, or the remaining time on Core's virtual firmware timer expires. The
+wait covers:
 
 - the supervisor control and lifecycle channel;
 - endpoint notification `eventfd`s;
@@ -169,10 +177,12 @@ blocking `ppoll()` waits across:
 - normal button GPIO edge events; and
 - Core's nearest firmware timer deadline.
 
-After wakeup, readiness still flows through Core's genuine `sysevents`
-dispatcher. Automatic lock, UI timers, transport timeouts, USB lifecycle and
+An FD event or timeout returns control to the genuine `sysevents_poll()` loop,
+which probes and dispatches the event through the normal firmware path. The
+platform wait neither manufactures a firmware event nor consumes a timer
+deadline. Automatic lock, UI timers, transport timeouts, USB lifecycle, and
 button input therefore retain firmware timing semantics without a busy loop.
-Measured stable idle CPU after this change is 0–0.2%, with no periodic
+Measured stable idle CPU falls from roughly 4–8% to 0–0.2%, with no periodic
 one-millisecond sleeps.
 
 ## Lifecycle

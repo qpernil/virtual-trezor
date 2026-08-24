@@ -63,7 +63,7 @@ official releases applies to the embedded firmware build in Trezor's pinned
 Linux build environment.
 
 The linked baseline intentionally contains SDL and UDP because it proves the
-official upstream target before replacement. The Raspberry Pi worker now
-replaces both upstream UDP implementations, the SDL display, and SDL buttons
-with FunctionFS, I2C, and GPIO platform objects; its validation is recorded in
+official upstream target in isolation. The Raspberry Pi worker links
+FunctionFS, I2C, SPI, and GPIO platform objects in place of the upstream UDP,
+SDL display, and SDL button objects; its validation is recorded in
 [`raspberry-pi-validation.md`](raspberry-pi-validation.md).
