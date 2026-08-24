@@ -81,7 +81,7 @@ current `display-backends` native library and the supervisor repository's
 worker-side discovery/CBOR library. The resulting executable is
 `build/virtual-trezor-worker`.
 
-For the cumulative Safe 3 display, GPIO, and supervisor USB target, install
+For the complete Safe 3 display, GPIO, and supervisor USB target, install
 `libjpeg-dev` plus the LLVM resource-header package matching the host and run:
 
 ```sh
@@ -92,6 +92,10 @@ This produces `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` and its two
 co-located shared libraries. Safe 3 uses the current stable Rust toolchain with
 the narrowly scoped bootstrap flag required by unchanged upstream Core
 nightly features.
+
+The diagnostic `make safe3-baseline` target retains upstream SDL/UDP and also
+requires `libsdl3-dev` and `libsdl3-image-dev` on Debian-family systems. These
+desktop dependencies are not linked into `make safe3-usb`.
 
 ## Install the supervisor and worker
 

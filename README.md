@@ -74,11 +74,14 @@ The supported configurations are:
   USB personality, and protocol stack;
 - Safe 3 is physically validated on the 240x240 ST7789 HAT with GPIO buttons,
   macOS USB enumeration, `trezorctl`, and Trezor Suite in debug mode; and
-- Safe 3's Linux virtual-WFI integration reduces stable idle load from roughly
-  4–8% to approximately 0–0.2% of one Pi 4 core without advancing firmware
-  time while suspended or delaying firmware deadlines: instead of polling
-  every millisecond, it blocks until USB/control activity, endpoint readiness,
-  a GPIO edge, or the remaining time on Core's virtual timer expires.
+- the unmodified upstream Safe 3 SDL/UDP emulator averages 9.85% of one Pi 4
+  core at its settled home screen because its Unix event loop wakes every
+  millisecond; and
+- Safe 3's Linux virtual-WFI integration settles at approximately 0–0.2% of
+  one Pi 4 core without advancing firmware time while suspended or delaying
+  firmware deadlines. It blocks until USB/control activity, endpoint
+  readiness, a GPIO edge, or the remaining time on Core's virtual timer
+  expires.
 
 Use the current acceptance checklist in
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
@@ -207,8 +210,10 @@ Rust UI, and cryptography source graph without changing the Trezor One worker:
 make safe3-baseline
 ```
 
-The baseline intentionally retains upstream SDL display/input and UDP USB. The
-first platform substitution is the separate, Linux-only display target:
+On Debian-family Linux systems this exact desktop emulator additionally
+requires `libsdl3-dev` and `libsdl3-image-dev`. The baseline intentionally
+retains upstream SDL display/input and UDP USB. The first platform substitution
+is the separate, Linux-only display target:
 
 ```sh
 make safe3-display
