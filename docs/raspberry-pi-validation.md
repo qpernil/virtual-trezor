@@ -91,8 +91,8 @@ continues afterward. For legacy Trezor, confirm the suspend log reports a
 completed flash checkpoint, the display turns off, and resume redraws the
 current framebuffer. Its worker should consume no periodic 10 ms wakeups while
 suspended, and a pending firmware deadline should retain the same remaining
-duration after resume. Safe 3 instead leaves display policy with genuine Core;
-confirm endpoint traffic pauses and resumes while the panel remains available.
+duration after resume. For Safe 3, genuine Core owns display policy; confirm
+endpoint traffic pauses and resumes while the panel remains available.
 If the host supplies the Pi's only power, first determine whether that machine
 and hub retain VBUS during sleep—VBUS loss cold-boots the Pi and cannot be
 handled as a USB event.
@@ -116,7 +116,8 @@ visible and both active-low firmware buttons work:
 For Safe 3, hold display-HAT KEY3 (GPIO16) and confirm the host loses the USB
 device while the worker PID remains alive. It must stay absent for the complete
 hold, then enumerate as a fresh generation immediately after release. Repeat
-with short and long holds and confirm old host handles no longer transfer.
+with short and long holds and confirm handles for the retired generation cannot
+transfer.
 
 Fault-inject a display disconnect. USB must remain operational, and the regular
 firmware polling path must reinitialize and retransmit the current framebuffer

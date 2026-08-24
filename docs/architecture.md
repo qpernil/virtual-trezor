@@ -110,9 +110,8 @@ USB generation is disturbed.
 Safe 3 also uses the control channel's split reconnect form. A KEY3 press sends
 an empty `Configure`, which unbinds and removes the active generation while the
 worker and firmware keep running. KEY3 release sends the genuine Core
-personality again. The supervisor binds it immediately: the physical hold is
-the complete detached interval, so the atomic-replacement 250 ms floor does not
-apply.
+personality again. The supervisor binds it immediately, making the physical
+hold the complete detached interval.
 
 Host sleep is a normal firmware lifecycle, not a process restart. For the
 legacy worker, a `SUSPEND`/`RESUME` pair preserves the current generation and
@@ -136,12 +135,15 @@ the Pi's only power and the host removes it, the result is necessarily a cold
 boot instead of a software event.
 
 Core's hardware scheduler executes `WFI` when no source is ready. The standard
-Unix emulator instead probes every source and sleeps for one millisecond. The
-Safe 3 supervisor worker replaces only that idle delay with a virtual WFI: one
-blocking `ppoll` over the control channel, endpoint notifications, and GPIO
-edges, bounded by Core's own nearest deadline. Readiness still flows through
-the genuine `sysevents` dispatcher; the platform wait merely supplies the
-Linux equivalent of an interrupt wakeup.
+Unix emulator's `sysevents_poll()` sleeps for one millisecond and repeats its
+source probes, consuming roughly 4–8% of one Pi 4 core. In the supervisor
+build, the exact no-event branch calls
+`virtual_trezor_wait_for_interrupt(deadline)`. That function blocks in one
+`ppoll` over the control channel, endpoint notifications, and GPIO edges,
+bounded by Core's own nearest deadline. It then returns to the genuine
+`sysevents` dispatcher to probe and dispatch readiness normally. This Linux
+equivalent of interrupt wakeup measures 0–0.2% stable idle CPU without changing
+firmware timer semantics.
 
 `mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
 supplies explicit rules for the project platform objects. The expected `udp.o`
