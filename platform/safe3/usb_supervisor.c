@@ -34,6 +34,7 @@
 #include <usb_worker_protocol.h>
 
 #include "supervisor_resources.h"
+#include "worker_config.h"
 
 #define CONTROL_FD 3
 #define PROTOCOL_HEADER_LENGTH 20U
@@ -284,10 +285,33 @@ static void send_record(uint8_t kind, uint32_t generation,
 }
 
 static void assign_resource(const char *name, size_t length, int fd) {
-  if (length == strlen("display-spi") &&
-      memcmp(name, "display-spi", length) == 0) {
-    g_display_bus_fd = fd;
-  } else if (length == strlen("display-control") &&
+  static const struct {
+    const char *resource;
+    const char *backend;
+  } displays[] = {
+      {"display-ssd1306-i2c", "ssd1306-i2c"},
+      {"display-sh1106-i2c", "sh1106-i2c"},
+      {"display-sh1106-spi", "sh1106-spi"},
+      {"display-st7789-spi", "st7789-spi"},
+  };
+
+  for (size_t i = 0; i < sizeof(displays) / sizeof(displays[0]); i++) {
+    if (length == strlen(displays[i].resource) &&
+        memcmp(name, displays[i].resource, length) == 0) {
+      char error[128];
+      if (g_display_bus_fd >= 0 ||
+          !worker_display_select_backend(displays[i].backend, error,
+                                         sizeof(error))) {
+        close(fd);
+        die(g_display_bus_fd >= 0 ? "duplicate Safe 3 display resource"
+                                 : error);
+      }
+      g_display_bus_fd = fd;
+      return;
+    }
+  }
+
+  if (length == strlen("display-control") &&
              memcmp(name, "display-control", length) == 0) {
     g_display_control_fd = fd;
   } else if (length == strlen("buttons") &&

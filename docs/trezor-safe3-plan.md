@@ -199,6 +199,11 @@ Controller-specific conversion belongs to `display-backends`:
   and
 - a future native 8-bit display backend may preserve all intensity values.
 
+The completed supervisor worker selects `ssd1306-i2c`, `sh1106-i2c`,
+`sh1106-spi`, or `st7789-spi` from the named bus resource delivered with the
+profile. This is the same backend set exposed by Trezor One; Safe 3 does not
+parse display options from Core's Python command line.
+
 This boundary lets the same firmware output reach different displays without
 changing Core UI code or silently discarding information before the selected
 backend sees it.
@@ -319,12 +324,10 @@ cryptography refactor before source lists or ownership are fixed.
 
 ## Deferred work
 
-The current Safe 3 platform constructs the ST7789 backend directly. Selecting
-SSD1306, SH1106, or another compatible `display-backends` controller and
-acquiring its corresponding resource set is deliberately deferred until after
-supervisor USB integration. Core will continue to submit the same unchanged
-`Mono8` frame; controller-specific conversion remains exclusively a backend
-concern.
+Additional display controllers require a `display-backends` implementation and
+a corresponding supervisor resource profile. Core will continue to submit the
+same unchanged `Mono8` frame; controller-specific conversion remains
+exclusively a backend concern.
 
 Safe 5 (`T3T1`) is the most natural later touchscreen target because its
 240x240 RGB565 framebuffer matches the existing ST7789 panel. An optional SDL

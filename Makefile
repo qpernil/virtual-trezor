@@ -51,6 +51,12 @@ check-worker-boundary:
 	@grep -q 'DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO8' platform/safe3/display_core.c
 	@grep -q 'display_backends_write_frame' platform/safe3/display_core.c
+	@grep -q 'VIRTUAL_TREZOR_DISPLAY_CONFIG_SOURCE' \
+		scripts/build-safe3-display.sh patches/safe3-headless-display.patch
+	@grep -q 'display-ssd1306-i2c' platform/safe3/usb_supervisor.c
+	@grep -q 'display-sh1106-i2c' platform/safe3/usb_supervisor.c
+	@grep -q 'display-sh1106-spi' platform/safe3/usb_supervisor.c
+	@grep -q 'display-st7789-spi' platform/safe3/usb_supervisor.c
 	@grep -q 'VIRTUAL_TREZOR_HEADLESS_DISPLAY' \
 		patches/safe3-headless-display.patch
 	@! grep -q '#include .*SDL' platform/safe3/button_gpio.c \

@@ -1,6 +1,6 @@
 schema = 1
-name = "virtual-trezor-safe3"
-functionfs_mount = "/dev/ffs-virtual-trezor-safe3"
+name = "virtual-trezor-safe3-sh1106-spi"
+functionfs_mount = "/dev/ffs-virtual-trezor-safe3-sh1106-spi"
 
 [worker]
 command = "/absolute/path/to/virtual-trezor-safe3-usb"
@@ -8,11 +8,11 @@ arguments = ["/absolute/path/to/trezor-firmware/core/src/main.py"]
 run_as = "worker-account"
 readiness_timeout_ms = 30000
 state_directory = "/var/lib/virtual-trezor-safe3"
-runtime_directory = "/run/virtual-trezor-safe3"
+runtime_directory = "/run/virtual-trezor-safe3-sh1106-spi"
 
 [[resources]]
 type = "character-device"
-name = "display-st7789-spi"
+name = "display-sh1106-spi"
 path = "/dev/spidev0.0"
 access = "read-write"
 
@@ -20,9 +20,9 @@ access = "read-write"
 type = "gpio-lines"
 name = "display-control"
 path = "/dev/gpiochip0"
-offsets = [25, 27, 24]
+offsets = [24, 25]
 direction = "output"
-initial_values = [false, false, false]
+initial_values = [false, false]
 
 [[resources]]
 type = "gpio-lines"

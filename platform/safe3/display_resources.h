@@ -12,9 +12,8 @@ typedef struct {
   bool owns_control_fd;
 } safe3_display_resources_t;
 
-/* Diagnostic display-first resource acquisition. If both inherited-FD
- * variables are present, use them without taking ownership. Otherwise open
- * the configured Linux device paths and request the ST7789 control lines. */
+/* Acquire the bus and control handles selected by the supervisor. Standalone
+ * display/input diagnostic builds retain an ST7789 SPI fallback. */
 bool safe3_display_resources_acquire(safe3_display_resources_t *resources);
 void safe3_display_resources_release(safe3_display_resources_t *resources);
 

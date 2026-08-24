@@ -61,7 +61,7 @@ index 1a1911e198..36b25c0573 100644
          // The emulator reuses the emulated board's display configuration (panel,
          // framebuffer) but always builds the unix driver instead of the HW one.
          add_driver_unix(lib)?;
-@@ -38,6 +49,22 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+@@ -38,6 +49,24 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
      Ok(())
  }
  
@@ -74,9 +74,11 @@ index 1a1911e198..36b25c0573 100644
 +
 +    lib.add_define("VIRTUAL_TREZOR_HEADLESS_DISPLAY", Some("1"));
 +    lib.add_include(virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_INCLUDE"));
++    lib.add_include(virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_CONFIG_INCLUDE"));
 +    lib.add_sources([
 +        virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_SOURCE"),
 +        virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE"),
++        virtual_trezor_source("VIRTUAL_TREZOR_DISPLAY_CONFIG_SOURCE"),
 +    ]);
 +    Ok(())
 +}
