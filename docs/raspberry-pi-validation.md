@@ -143,6 +143,14 @@ session and averaged 9.85% of one core over ten two-second `pidstat` samples
 idle load; it is not a single-variable comparison because the upstream
 baseline also retains SDL and UDP.
 
+The measurement command was `pidstat -p PID 2 10`. Confirm the sampled PID is
+`build/safe3-t3b1/unix/trezor-emu-core`, not a shell wrapper. The baseline and
+USB worker are unfrozen emulator builds: their executable contains
+MicroPython plus native C/Rust modules, while application `.py` modules are
+loaded from `core/src` and compiled to bytecode at runtime. This differs from
+real firmware packaging, where `mpy-cross` output is frozen into the firmware
+image.
+
 On a fresh Windows device instance, confirm that interface zero binds to
 Microsoft's inbox WinUSB driver without installing an INF. Then inspect the BOS
 descriptor and confirm the WebUSB 1.0 platform capability uses vendor request
