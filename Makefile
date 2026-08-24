@@ -57,6 +57,8 @@ check-worker-boundary:
 	@grep -q 'display-sh1106-i2c' platform/safe3/usb_supervisor.c
 	@grep -q 'display-sh1106-spi' platform/safe3/usb_supervisor.c
 	@grep -q 'display-st7789-spi' platform/safe3/usb_supervisor.c
+	@grep -q 'virtual_trezor_wait_for_interrupt' \
+		platform/safe3/usb_supervisor.c patches/safe3-headless-display.patch
 	@grep -q 'VIRTUAL_TREZOR_HEADLESS_DISPLAY' \
 		patches/safe3-headless-display.patch
 	@! grep -q '#include .*SDL' platform/safe3/button_gpio.c \

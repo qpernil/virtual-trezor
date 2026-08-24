@@ -224,7 +224,7 @@ diff --git a/core/embed/sys/task/build.rs b/core/embed/sys/task/build.rs
 index 41d43a6467..fbb80017e3 100644
 --- a/core/embed/sys/task/build.rs
 +++ b/core/embed/sys/task/build.rs
-@@ -17,10 +17,14 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+@@ -17,10 +17,17 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
      if cfg!(feature = "emulator") {
          lib.add_sources([
              "task/unix/coreapp.c",
@@ -237,6 +237,9 @@ index 41d43a6467..fbb80017e3 100644
 +        } else {
 +            lib.add_define("VIRTUAL_TREZOR_HEADLESS_DISPLAY", Some("1"));
 +        }
++        if std::env::var_os("VIRTUAL_TREZOR_SUPERVISOR_USB").is_some() {
++            lib.add_define("VIRTUAL_TREZOR_SUPERVISOR_USB", Some("1"));
++        }
      } else if cfg!(feature = "mcu_stm32") {
          lib.add_sources([
              "task/stm32/coreapp.c",
@@ -244,7 +247,7 @@ diff --git a/core/embed/sys/task/sysevent.c b/core/embed/sys/task/sysevent.c
 index ec28c62dbb..7b81d4236f 100644
 --- a/core/embed/sys/task/sysevent.c
 +++ b/core/embed/sys/task/sysevent.c
-@@ -33,7 +33,7 @@
+@@ -33,7 +33,11 @@
  #include <sys/applet.h>
  #endif
  
@@ -252,6 +255,10 @@ index ec28c62dbb..7b81d4236f 100644
 +#if defined(TREZOR_EMULATOR) && !defined(VIRTUAL_TREZOR_HEADLESS_DISPLAY)
  #include <sys/unix/sdl_event.h>
  #endif
++
++#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
++void virtual_trezor_wait_for_interrupt(uint32_t deadline);
++#endif
  
 @@ -229,7 +229,7 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
    }
@@ -261,4 +268,17 @@ index ec28c62dbb..7b81d4236f 100644
 +#if defined(TREZOR_EMULATOR) && !defined(VIRTUAL_TREZOR_HEADLESS_DISPLAY)
      // Poll SDL events and dispatch them
      sdl_events_poll();
+ #endif
+@@ -288,8 +292,12 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
+     if (!events_processed) {
+ #ifdef TREZOR_EMULATOR
++#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
++      virtual_trezor_wait_for_interrupt(deadline);
++#else
+       // Wait a bit to not consume 100% CPU
+       systick_delay_ms(1);
++#endif
+ #else
+       // Wait for the next event
+       __WFI();
  #endif

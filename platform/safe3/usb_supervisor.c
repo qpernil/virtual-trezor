@@ -21,6 +21,7 @@
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <io/usb.h>
@@ -29,6 +30,7 @@
 #include <io/usb_webusb.h>
 #include <sys/sysevent_source.h>
 #include <sys/systask.h>
+#include <sys/systick.h>
 
 #include <usb_personality_ffi.h>
 #include <usb_worker_protocol.h>
@@ -158,6 +160,13 @@ static void die_errno(const char *operation) {
 static void die(const char *message) {
   fprintf(stderr, "virtual-trezor-safe3: %s\n", message);
   exit(1);
+}
+
+static void make_nonblocking(int fd, const char *description) {
+  int flags = fcntl(fd, F_GETFL);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    die_errno(description);
+  }
 }
 
 static uint16_t be16(const uint8_t *bytes) {
@@ -372,11 +381,10 @@ __attribute__((constructor)) static void receive_initial_resources(void) {
       g_reconnect_button_fd < 0) {
     die("incomplete Safe 3 supervisor resource set");
   }
-  int flags = fcntl(g_reconnect_button_fd, F_GETFL);
-  if (flags < 0 ||
-      fcntl(g_reconnect_button_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    die_errno("make Safe 3 reconnect button nonblocking");
-  }
+  make_nonblocking(g_button_lines_fd,
+                   "make Safe 3 button resource nonblocking");
+  make_nonblocking(g_reconnect_button_fd,
+                   "make Safe 3 reconnect button nonblocking");
 }
 
 int safe3_supervisor_display_bus_fd(void) { return g_display_bus_fd; }
@@ -978,6 +986,81 @@ static void service_controller(void) {
       }
     }
   }
+}
+
+static void drain_button_interrupts(void) {
+  for (;;) {
+    struct gpio_v2_line_event event;
+    ssize_t length = read(g_button_lines_fd, &event, sizeof(event));
+    if (length == (ssize_t)sizeof(event)) {
+      continue;
+    }
+    if (length < 0 && errno == EINTR) {
+      continue;
+    }
+    if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      return;
+    }
+    if (length == 0) {
+      die("Safe 3 button resource closed");
+    }
+    if (length < 0) {
+      die_errno("read Safe 3 button interrupt");
+    }
+    die("partial Safe 3 button interrupt");
+  }
+}
+
+void virtual_trezor_wait_for_interrupt(uint32_t deadline) {
+  int32_t remaining_ms = (int32_t)(deadline - systick_ms());
+  if (remaining_ms <= 0) {
+    return;
+  }
+
+  struct pollfd fds[3 + MAX_ENDPOINT_NUMBER * 2];
+  size_t count = 0;
+  fds[count++] = (struct pollfd){.fd = CONTROL_FD,
+                                 .events = POLLIN | POLLHUP | POLLERR};
+  fds[count++] = (struct pollfd){.fd = g_reconnect_button_fd,
+                                 .events = POLLIN | POLLHUP | POLLERR};
+  size_t button_index = count;
+  fds[count++] = (struct pollfd){.fd = g_button_lines_fd,
+                                 .events = POLLIN | POLLHUP | POLLERR};
+  if (g_usb.enabled) {
+    for (uint8_t number = 1; number <= MAX_ENDPOINT_NUMBER; number++) {
+      for (size_t direction = 0; direction < 2; direction++) {
+        int event_fd = g_usb.endpoints[number][direction].event_fd;
+        if (event_fd >= 0) {
+          fds[count++] = (struct pollfd){.fd = event_fd,
+                                         .events = POLLIN | POLLHUP | POLLERR};
+        }
+      }
+    }
+  }
+
+  struct timespec timeout = {
+      .tv_sec = remaining_ms / 1000,
+      .tv_nsec = (remaining_ms % 1000) * 1000000L,
+  };
+  int result = ppoll(fds, count, &timeout, NULL);
+  if (result < 0) {
+    if (errno == EINTR) {
+      return;
+    }
+    die_errno("wait for Safe 3 virtual interrupt");
+  }
+  if (result == 0) {
+    return;
+  }
+
+  if ((fds[button_index].revents & POLLIN) != 0) {
+    drain_button_interrupts();
+  }
+  if ((fds[button_index].revents & ~POLLIN) != 0) {
+    die("Safe 3 button resource reported an unexpected poll event");
+  }
+
+  service_controller();
 }
 
 static void on_task_created(void *context, systask_id_t task_id) {

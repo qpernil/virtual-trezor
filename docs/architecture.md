@@ -135,6 +135,14 @@ replays firmware configuration while leaving the worker alive. If USB VBUS is
 the Pi's only power and the host removes it, the result is necessarily a cold
 boot instead of a software event.
 
+Core's hardware scheduler executes `WFI` when no source is ready. The standard
+Unix emulator instead probes every source and sleeps for one millisecond. The
+Safe 3 supervisor worker replaces only that idle delay with a virtual WFI: one
+blocking `ppoll` over the control channel, endpoint notifications, and GPIO
+edges, bounded by Core's own nearest deadline. Readiness still flows through
+the genuine `sysevents` dispatcher; the platform wait merely supplies the
+Linux equivalent of an interrupt wakeup.
+
 `mk/worker-firmware.mk` includes the genuine upstream firmware Makefile and
 supplies explicit rules for the project platform objects. The expected `udp.o`
 is compiled from `platform/raspberry-pi/usb_functionfs.c`. The derived emulator
