@@ -74,6 +74,27 @@ are always reversed afterward:
 
 The pinned upstream submodule must be clean before and after every build.
 
+## MicroPython execution model
+
+All four project targets are Unix emulator builds. `safe3-baseline` invokes
+upstream `build_unix`; the display, input, and USB targets invoke upstream
+`xtask` with `build firmware --emulator --pyopt false`. None passes `--frozen`.
+
+The resulting executable contains the MicroPython interpreter and the compiled
+C and Rust native modules. Core's application modules remain `.py` files under
+`core/src`; the emulator imports them from the filesystem and compiles them to
+MicroPython bytecode at runtime. Consequently the worker must start with
+`core/src` as its script directory, and changing application Python takes
+effect without relinking the native executable.
+
+Real Safe 3 firmware enables Core's `frozen` feature. The build runs the Python
+modules through `mpy-cross`, generates `frozen_mpy.c`, links that bytecode into
+the firmware image, and starts `main.py` from the frozen module table. Upstream
+also provides `build_unix_frozen` for a Unix emulator with that packaging, but
+the Virtual Trezor Safe 3 artifacts intentionally use the ordinary unfrozen
+emulator form during development. This changes how Python is packaged and
+loaded; it does not replace Core's application code or MicroPython runtime.
+
 ## Firmware and state
 
 The worker runs upstream model `T3B1` from Core release `2.12.4`. Core's
@@ -189,9 +210,13 @@ An exact upstream `make safe3-baseline` build was also measured on the same Pi
 SSH session was headless, and ran unmodified `sysevents_poll()`. After reaching
 the home screen, ten two-second `pidstat` samples averaged 9.85% of one core:
 4.50% user time and 5.35% kernel time. The identical artifact measured about
-1.7% on an M-series Mac. This confirms that the persistent idle cost exists in
-Trezor's upstream emulator; because the baseline also contains SDL and UDP, it
-is not a single-variable benchmark of the virtual-WFI hook.
+1.7% on an M-series Mac. That contrast helps explain why the portable
+one-millisecond delay is a reasonable simplicity tradeoff for a desktop
+development emulator: it consumes only a small fraction of one modern desktop
+core. The same 1 kHz wake cadence is material on the Pi 4. This confirms that
+the persistent idle cost exists in Trezor's upstream emulator; because the
+baseline also contains SDL and UDP, it is not a single-variable benchmark of
+the virtual-WFI hook.
 
 ## Lifecycle
 

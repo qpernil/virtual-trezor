@@ -75,8 +75,8 @@ The supported configurations are:
 - Safe 3 is physically validated on the 240x240 ST7789 HAT with GPIO buttons,
   macOS USB enumeration, `trezorctl`, and Trezor Suite in debug mode; and
 - the unmodified upstream Safe 3 SDL/UDP emulator averages 9.85% of one Pi 4
-  core at its settled home screen because its Unix event loop wakes every
-  millisecond; and
+  core at its settled home screen, versus about 1.7% on an M-series Mac,
+  because its Unix event loop wakes every millisecond; and
 - Safe 3's Linux virtual-WFI integration settles at approximately 0–0.2% of
   one Pi 4 core without advancing firmware time while suspended or delaying
   firmware deadlines. It blocks until USB/control activity, endpoint
@@ -212,8 +212,15 @@ make safe3-baseline
 
 On Debian-family Linux systems this exact desktop emulator additionally
 requires `libsdl3-dev` and `libsdl3-image-dev`. The baseline intentionally
-retains upstream SDL display/input and UDP USB. The first platform substitution
-is the separate, Linux-only display target:
+retains upstream SDL display/input and UDP USB.
+
+Safe 3 project artifacts are unfrozen Unix emulator builds. They embed
+MicroPython and the native C/Rust modules, then load application `.py` modules
+from `upstream/trezor-firmware/core/src` and compile them to bytecode at
+runtime. Real firmware instead links `mpy-cross` output into its image. See
+[`docs/trezor-safe3.md`](docs/trezor-safe3.md) for the complete execution model.
+
+The separate Linux display diagnostic target is:
 
 ```sh
 make safe3-display
