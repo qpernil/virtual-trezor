@@ -6,8 +6,7 @@ not be used with real funds, recovery seeds, passphrases, or valuable secrets.
 
 ## Supported versions
 
-Security fixes are made on the `main` branch. Historical commits and upstream
-firmware releases pinned by older commits are not maintained separately.
+Only the `main` branch and its pinned upstream firmware release are supported.
 
 ## Reporting a vulnerability
 
