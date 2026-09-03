@@ -25,8 +25,14 @@ jobs:
           repository: qpernil/display-backends
           path: display-backends
 
+      - name: Check out USB gadget supervisor HEAD
+        uses: actions/checkout@v7
+        with:
+          repository: qpernil/usb-gadget-supervisor
+          path: usb-gadget-supervisor
+
       - name: Install pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@1.94.0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
