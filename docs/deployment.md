@@ -50,8 +50,8 @@ Debian-family systems the base packages are:
 sudo apt install build-essential git pkg-config python3-dev libffi-dev rustup
 sudo snap install astral-uv --classic
 rustup set profile minimal
-rustup toolchain install stable
-rustup default stable
+rustup toolchain install 1.95.0
+rustup default 1.95.0
 ```
 
 The build uses `uv tool run` with pinned `grpcio-tools==1.81.0`, which provides
@@ -89,7 +89,7 @@ make safe3-usb
 ```
 
 This produces `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` and its two
-co-located shared libraries. Safe 3 uses the current stable Rust toolchain with
+co-located shared libraries. Safe 3 uses stable Rust 1.95 or newer with
 the narrowly scoped bootstrap flag required by unchanged upstream Core
 nightly features.
 
