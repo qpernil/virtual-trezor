@@ -37,8 +37,11 @@ git -C "$UPSTREAM_DIR" submodule update --init --recursive \
   vendor/ts-tvl
 
 RUST_VERSION="$(rustc --version)"
-if [[ "$RUST_VERSION" == *nightly* ]]; then
-  echo "Safe 3 project builds use global stable Rust; got: $RUST_VERSION" >&2
+RUST_NUMBER="${RUST_VERSION#rustc }"
+RUST_NUMBER="${RUST_NUMBER%% *}"
+IFS=. read -r RUST_MAJOR RUST_MINOR RUST_PATCH <<< "$RUST_NUMBER"
+if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 && RUST_MINOR < 95) )); then
+  echo "Safe 3 project builds require stable Rust 1.95 or newer; got: $RUST_VERSION" >&2
   exit 1
 fi
 

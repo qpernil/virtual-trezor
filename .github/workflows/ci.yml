@@ -31,8 +31,14 @@ jobs:
           repository: qpernil/usb-gadget-supervisor
           path: usb-gadget-supervisor
 
+      - name: Check out I2C target dependency
+        uses: actions/checkout@v7
+        with:
+          repository: qpernil/raspberry-pi-i2c-target
+          path: raspberry-pi-i2c-target
+
       - name: Install pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@1.94.0
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

@@ -39,7 +39,7 @@ make check
 ```
 
 Keep the repositories as sibling directories. Built workers require Linux, a
-C toolchain, the current stable Rust toolchain, and `uv`.
+C toolchain, stable Rust 1.95 or newer, and `uv`.
 The build obtains the matching protobuf compiler through pinned
 `grpcio-tools==1.81.0` package metadata:
 

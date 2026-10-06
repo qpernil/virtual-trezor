@@ -49,7 +49,7 @@ and do not change the Trezor One artifact.
 
 The complete worker requires Linux, `libjpeg-dev`, the LLVM resource headers
 matching the host compiler, the repository's pinned Python environment, and
-the current stable Rust toolchain:
+stable Rust 1.95 or newer:
 
 ```sh
 make init
@@ -59,9 +59,8 @@ make safe3-usb
 
 The upstream Core workspace currently uses nightly-only language and Cargo
 features. The build therefore applies the narrowly scoped
-`RUSTC_BOOTSTRAP=1` environment setting while still using the global stable
-toolchain. It records the upstream revision and Rust version beside each
-artifact.
+`RUSTC_BOOTSTRAP=1` environment setting while still using stable Rust 1.95 or newer. It
+records the upstream revision and Rust version beside each artifact.
 
 Two checked project overlays are applied only while a Safe 3 target builds and
 are always reversed afterward:
