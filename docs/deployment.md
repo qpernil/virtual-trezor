@@ -322,15 +322,19 @@ sudo -E ./prebuilt/aarch64/virtual-display \
   0x3c ./kernel
 ```
 
-The 40-pin wiring is the same on the tested Pi 4 controller and Pi 3B+ target:
+The wiring for a Pi 4 controller and a Pi 3-family target is:
 
 | Signal | Worker/controller Pi | Viewer/target Pi |
 | --- | --- | --- |
-| SDA | GPIO2, physical pin 3 | GPIO2, physical pin 3 |
-| SCL | GPIO3, physical pin 5 | GPIO3, physical pin 5 |
+| SDA | GPIO2, physical pin 3 | GPIO18, physical pin 12 |
+| SCL | GPIO3, physical pin 5 | GPIO19, physical pin 35 |
 | Ground | physical pin 6 | physical pin 6 |
 | No/left | GPIO5, physical pin 29, input | GPIO5, physical pin 29, open-drain output |
 | Yes/right | GPIO26, physical pin 37, input | GPIO26, physical pin 37, open-drain output |
+
+A Pi 4 target instead uses GPIO10/pin 19 for SDA and GPIO11/pin 23 for SCL;
+see the driver's [wiring table](https://github.com/qpernil/raspberry-pi-i2c-target#wiring).
+The target BSC peripheral uses different pins from the controller's I2C bus.
 
 Do not connect the boards' power rails. Holding the viewer's left, middle, or
 right third drives No, both buttons, or Yes for as long as the mouse button

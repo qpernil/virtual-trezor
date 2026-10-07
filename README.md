@@ -33,6 +33,7 @@ submodules required by the checked firmware targets:
 ```sh
 git clone https://github.com/qpernil/virtual-trezor.git
 git clone https://github.com/qpernil/display-backends.git
+git clone https://github.com/qpernil/usb-gadget-supervisor.git
 cd virtual-trezor
 make init
 make check
