@@ -1,4 +1,4 @@
-# I2C display plan
+# I2C display integration and qualification
 
 ## Purpose and fidelity boundary
 
@@ -73,17 +73,19 @@ The I2C backend and target renderer were compared against the upstream SDL
 baseline when deciding byte, bit, page, and segment mapping. No transformation
 belongs in upstream `legacy/oled.c`.
 
-## Staged implementation
+## Supported integration and remaining qualification
 
-1. **Complete:** mirror the upstream SDL baseline to SSD1306 and SH1106 I2C.
-2. **Complete:** reconstruct and render either controller stream on a second
-   Pi with the generic `virtual-display` client.
-3. **Complete:** compare startup, prompts, confirmations, and animations.
-4. **Complete:** capture the bus at 400 kHz and verify target-driver overrun and
-   drop counters under repeated animation traffic.
-5. **Complete:** remove local SDL and use GPIO5/GPIO26 for firmware buttons;
-   the remote viewer can hold those lines low from mouse input.
-6. **Pending:** attach and validate an I2C-native physical 128x64 OLED.
+SSD1306 and SH1106 I2C streams are reconstructed by the second-Pi
+`virtual-display` client and compared with the upstream SDL baseline, including
+startup, prompts, confirmations and animations. Scope captures at 400 kHz and
+target-driver counters cover repeated animation traffic. The worker uses
+GPIO5/GPIO26 for firmware buttons; the remote viewer can hold those lines low
+from mouse input.
+
+The physical SH1106 SPI HAT and ST7789 display are qualified as described in
+[deployment](deployment.md). A physical I2C-native 128x64 OLED still requires
+qualification; the second-Pi receiver establishes the electrical and protocol
+path without claiming that physical-panel result.
 
 `usb-gadget-supervisor` opens the required `display-i2c` bus, claims the exact
 display-control and button GPIO groups, and appends those three handles to the
@@ -107,12 +109,13 @@ response data. The controller remained an enumerated, responsive Trezor USB
 gadget while mirroring the display.
 
 The two targets delivered 210 and 225 userspace records for the identical byte
-total. The BSC target peripheral does not expose STOP directly, so its 100 us
-completion timer can combine adjacent controller writes when the inter-message
-idle interval is shorter. No bytes were lost. The SSD1306 interpreter must
+total. The BSC target peripheral does not expose STOP directly, so the 100 us
+completion timer used for that capture could combine adjacent controller writes
+when the inter-message idle interval is shorter. No bytes were lost. The SSD1306 interpreter must
 therefore parse control bytes and command/data lengths as a byte stream rather
 than assuming every character-device `read()` maps one-to-one to a controller
-`write()`.
+`write()`. The current driver uses a 300 us default tail timer; this changes
+record grouping without changing the byte-stream parsing requirement.
 
 The SH1106 stream was validated on the same physical bus on 2026-08-18. Two
 independent worker/target runs each received exactly 139,412 bytes:
@@ -128,7 +131,8 @@ service logged SH1106 selection at `0x3c`, and the kernel reported GPIO25 as
 an output owned by `virtual-trezor-display`; the receive-only target returned
 no data and both captures ended on the same complete-frame boundary. The
 second-Pi renderer subsequently confirmed orientation and the two-column
-SH1106 RAM offset; the physical Waveshare HAT remains to be tested.
+SH1106 RAM offset. The physical Waveshare SH1106 HAT is qualified over SPI;
+physical I2C-native panel qualification remains outstanding.
 
 ## Pi 4 controller clock verification
 
