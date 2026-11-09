@@ -175,8 +175,11 @@ See [`docs/architecture.md`](docs/architecture.md),
 
 The maintained
 [`qpernil/trezor-firmware`](https://github.com/qpernil/trezor-firmware) fork
-is a Git submodule at `upstream/trezor-firmware`. Its integration changes are
-ordinary commits based on the official Trezor release:
+is a Git submodule at `upstream/trezor-firmware`. The fork's `main` mirrors
+official upstream; `virtual-trezor` carries our integration commits on the
+selected release base. The submodule records an exact tested commit from that
+branch, so syncing the mirror or advancing the branch cannot silently change a
+build. Its pinned versions are:
 
 | Item | Value |
 | --- | --- |

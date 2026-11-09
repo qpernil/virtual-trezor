@@ -1,3 +1,4 @@
 [submodule "upstream/trezor-firmware"]
 	path = upstream/trezor-firmware
 	url = https://github.com/qpernil/trezor-firmware.git
+	branch = virtual-trezor

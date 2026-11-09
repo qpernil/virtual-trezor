@@ -29,6 +29,13 @@ Physical USB smoke tests on `gadget-host` with the ST7789 profiles verify:
   the worker. The display shows `NO USB CONNECTION` while ejected, as confirmed
   by direct observation. Both worker services run without automatic restarts.
 
+The Trezor One KEY3 integration is physically verified on `gadget-host`: pressing
+and releasing GPIO16 removes and recreates the USB generation with the same
+worker PID and zero service restarts. A subsequent macOS feature query and
+192-byte ping succeed. The Linux controller regression test also covers startup
+with KEY3 held, repeated cycles, retirement of endpoint descriptors, suppression
+of firmware reconnect requests during a hold, and ejection while suspended.
+
 These checks do not qualify wallet operations, initialized Safe 3 state
 migration, every display/button workflow, or suspend/idle performance. Earlier
 physical measurements below used Core `2.12.4` and legacy `1.14.1`; repeat the
