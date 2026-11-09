@@ -402,7 +402,7 @@ at boot, and ensure Virtual YubiKey or other gadget instances are disabled.
 
 The UDC should reach `configured` after attachment to the host. For Trezor
 One, confirm that `trezorctl` or the pinned `trezorlib` reports model `1` and
-firmware `1.14.1`.
+firmware `1.14.2`.
 
 For Safe 3, confirm that the host sees the `T3B1`/Safe 3 features and then run
 Trezor Suite in **debug mode**. Debug mode selects Suite's emulator trust path,

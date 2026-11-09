@@ -1,7 +1,26 @@
 # Raspberry Pi Validation
 
+Hostnames and device/account identifiers below are illustrative; replace them with your own configured values.
+
 Use this checklist for each Virtual Trezor profile after building the worker
 and installing the matching supervisor.
+
+## Verified build baseline
+
+Core `2.13.0` / legacy `1.14.2`, upstream commit
+`037e506db454691bda188df2803df2fc26c75f36`, is build-validated on `gadget-host`
+(AArch64 Linux) with Rust `1.99.1`. Both `make safe3-usb` and `make worker`
+complete, and `make check` passes on Linux and macOS. The checks include the
+ported RNG paths, entropy-source failure handling, absence of reseeding
+symbols, and clean application of all build overlays.
+
+The Safe 3 binary resolves both bundled project libraries; those copies match
+the freshly built dependencies. All seven installed Trezor profiles on
+`gadget-host` pass supervisor schema validation and remain inactive. This validates
+builds and configuration, not physical USB, display, button, or persistent-state
+migration behavior on this release. Earlier physical measurements below used
+Core `2.12.4` and legacy `1.14.1`; repeat the checklist to qualify the new release
+on hardware.
 
 ## Build and profile
 

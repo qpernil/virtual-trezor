@@ -84,7 +84,9 @@ The supported configurations are:
   readiness, a GPIO edge, or the remaining time on Core's virtual timer
   expires.
 
-Use the current acceptance checklist in
+Current release builds and configuration are verified; physical measurements
+above were made with the earlier release. See the verification scope and
+current acceptance checklist in
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
 enumeration, resource confinement, transport, UI, and worker-incarnation
 recovery.
