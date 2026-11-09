@@ -171,8 +171,9 @@ The resulting choices are:
 
 The SPI profiles declare `/dev/spidev0.0`; the I2C profiles declare
 `/dev/i2c-1`. Each also declares one display-control output group and one button
-input/event group on `/dev/gpiochip0`. The supervisor opens the bus, claims the
-exact GPIO offsets, and passes the three resulting handles before dropping
+input/event group, plus a separate KEY3 input/event handle for GPIO16, on
+`/dev/gpiochip0`. The supervisor opens the bus, claims the exact GPIO offsets,
+and passes the four resulting handles before dropping
 privileges. It does not pass the GPIO-chip descriptor, so the worker can neither
 select different offsets nor change line configuration. No `i2c`, `spi`, or
 `gpio` group membership is required. The worker exits rather than silently
@@ -263,9 +264,13 @@ The factory HAT mapping is:
 
 No/left and Yes/right mean the HAT joystick directions. Pressing the joystick
 straight down reports both logical Trezor buttons simultaneously. The separate
-KEY1, KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16. The Safe 3 USB
-profile reserves KEY3: holding it unconfigures the gadget and releasing it
-publishes a fresh USB generation. KEY1 and KEY2 remain unassigned.
+KEY1, KEY2, and KEY3 switches use GPIO21, GPIO20, and GPIO16. Both Trezor USB
+workers reserve KEY3: holding it unconfigures the gadget and releasing it
+publishes a fresh USB generation without restarting firmware. Install the
+matching profile when upgrading a Trezor One worker: `reconnect-button` is a
+required resource. Upstream firmware owns the display response to disconnection;
+the Linux integration does not draw a custom disconnect screen. KEY1 and KEY2
+remain unassigned.
 
 The worker configures mode 0 at 4 MHz. Power down before fitting or removing
 the HAT. Stop the I2C virtual-display setup and disconnect its inter-Pi wiring

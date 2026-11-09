@@ -3,7 +3,7 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 
 .DEFAULT_GOAL := check
 
-.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random init \
+.PHONY: all check check-legacy-usb check-platform check-upstream check-worker-boundary check-safe3-random init \
 	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
 	safe3-usb worker
 
@@ -14,7 +14,7 @@ init:
 
 init-baseline: init
 
-check: check-upstream check-worker-boundary check-platform check-safe3-random
+check: check-upstream check-worker-boundary check-platform check-safe3-random check-legacy-usb
 
 check-upstream:
 	./scripts/check-upstream.sh
@@ -181,3 +181,18 @@ safe3-usb: check-upstream
 
 worker: check
 	./scripts/build-pi-worker.sh
+
+# The actual virtual controller depends on Linux GPIO/eventfd APIs.
+check-legacy-usb:
+ifeq ($(shell uname -s),Linux)
+	@mkdir -p build/tests
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -DEMULATOR=1 -pthread \
+		-Iplatform/raspberry-pi -Iupstream/trezor-firmware/legacy \
+		-Iupstream/trezor-firmware/legacy/firmware \
+		-Iupstream/trezor-firmware/legacy/vendor/libopencm3/include \
+		-I$(USB_GADGET_SUPERVISOR_DIR)/worker \
+		tests/test_legacy_usb_eject.c -o build/tests/test_legacy_usb_eject
+	@build/tests/test_legacy_usb_eject
+else
+	@echo "Legacy USB controller lifecycle test requires Linux."
+endif

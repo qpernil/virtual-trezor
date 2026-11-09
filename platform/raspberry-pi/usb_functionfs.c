@@ -5,6 +5,8 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <fcntl.h>
+#include <linux/gpio.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -13,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -84,6 +87,9 @@ static int control_fd = CONTROL_FD;
 static int display_resource_fd = -1;
 static int display_control_fd = -1;
 static int button_lines_fd = -1;
+static int reconnect_button_fd = -1;
+static bool reconnect_pressed = false;
+static bool usb_ejected = false;
 static uint32_t generation = 0;
 static uint32_t next_configuration_request = 1;
 static bool usb_enabled = false;
@@ -256,9 +262,46 @@ static void assign_resource(const char *name, size_t name_length, int fd) {
   } else if (name_length == strlen("buttons") &&
              memcmp(name, "buttons", name_length) == 0) {
     button_lines_fd = fd;
+  } else if (name_length == strlen("reconnect-button") &&
+             memcmp(name, "reconnect-button", name_length) == 0) {
+    reconnect_button_fd = fd;
   } else {
     close(fd);
     die_message("unknown supervisor resource name");
+  }
+}
+
+static void refresh_reconnect_state(void) {
+  struct gpio_v2_line_event event;
+  for (;;) {
+    ssize_t length = read(reconnect_button_fd, &event, sizeof(event));
+    if (length == (ssize_t)sizeof(event)) {
+      continue;
+    }
+    if (length < 0 && errno == EINTR) {
+      continue;
+    }
+    if (length < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      break;
+    }
+    if (length < 0) {
+      die_errno("read reconnect button event");
+    }
+    die_message("incomplete reconnect button event");
+  }
+  struct gpio_v2_line_values values = {.mask = 1};
+  int result;
+  do {
+    result = ioctl(reconnect_button_fd, GPIO_V2_LINE_GET_VALUES_IOCTL, &values);
+  } while (result != 0 && errno == EINTR);
+  if (result != 0) {
+    die_errno("read reconnect button level");
+  }
+  bool pressed = (values.bits & 1) != 0;
+  if (pressed != reconnect_pressed) {
+    reconnect_pressed = pressed;
+    fprintf(stderr, "virtual-trezor: KEY3 pressed=%s\n",
+            pressed ? "true" : "false");
   }
 }
 
@@ -294,9 +337,14 @@ void workerReceiveSupervisorResources(void) {
   }
   record.fd_count = 0;
   if (offset != record.body_length || display_resource_fd < 0 ||
-      display_control_fd < 0 || button_lines_fd < 0) {
+      display_control_fd < 0 || button_lines_fd < 0 || reconnect_button_fd < 0) {
     die_message("incomplete supervisor resource set");
   }
+  int flags = fcntl(reconnect_button_fd, F_GETFL);
+  if (flags < 0 || fcntl(reconnect_button_fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+    die_errno("make reconnect button nonblocking");
+  }
+  refresh_reconnect_state();
 }
 
 int workerDisplayResourceFd(void) { return display_resource_fd; }
@@ -579,6 +627,14 @@ static bool firmware_control_transfer(void *context, const uint8_t setup[8],
   return !stalled;
 }
 
+static uint32_t configuration_request_id(void) {
+  uint32_t request_id = next_configuration_request++;
+  if (request_id == 0) {
+    die_message("USB configuration request ID overflow");
+  }
+  return request_id;
+}
+
 static uint32_t send_configuration(void) {
   uint8_t *bundle = NULL;
   size_t bundle_length = 0;
@@ -588,10 +644,7 @@ static uint32_t send_configuration(void) {
     die_message("USB personality discovery failed");
   }
   _usbd_reset(&virtual_device);
-  uint32_t request_id = next_configuration_request++;
-  if (request_id == 0) {
-    die_message("USB configuration request ID overflow");
-  }
+  uint32_t request_id = configuration_request_id();
   send_record(KIND_CONFIGURE, generation, request_id, bundle, bundle_length);
   ugsp_personality_cbor_free(bundle, bundle_length);
   return request_id;
@@ -923,8 +976,37 @@ static void handle_runtime_record(struct worker_record *record) {
   }
 }
 
+static void unconfigure_until_quiesced(void) {
+  uint32_t request_id = configuration_request_id();
+  send_record(KIND_CONFIGURE, generation, request_id, NULL, 0);
+  for (;;) {
+    struct worker_record record;
+    receive_record(&record, 0);
+    if (record.kind == KIND_CONFIGURATION_REJECTED &&
+        record.generation == generation && record.request_id == request_id &&
+        record.fd_count == 0) {
+      die_message("supervisor rejected USB ejection");
+    }
+    if (record.kind == KIND_QUIESCE && record.generation == generation &&
+        record.request_id == request_id && record.body_length == 0 &&
+        record.fd_count == 0) {
+      handle_quiesce(&record);
+      /* Detaching while the host sleeps must not leave firmware time and the
+       * display parked waiting for a resume event from a retired generation. */
+      worker_timer_resume();
+      worker_display_resume();
+      usb_ejected = true;
+      fputs("virtual-trezor: USB ejected; waiting for KEY3 release\n", stderr);
+      return;
+    }
+    /* Bus/control records already queued before the request still belong to
+     * the serving generation and must be processed before its quiesce. */
+    handle_runtime_record(&record);
+  }
+}
+
 static void service_virtual_usb(int timeout_ms) {
-  struct pollfd pollfds[2 + MAX_ENDPOINT_NUMBER];
+  struct pollfd pollfds[3 + MAX_ENDPOINT_NUMBER];
   size_t count = 0;
   size_t control_index = count;
   pollfds[count++] =
@@ -935,6 +1017,9 @@ static void service_virtual_usb(int timeout_ms) {
     pollfds[count++] =
         (struct pollfd){.fd = buttonEventFd(), .events = POLLIN | POLLPRI};
   }
+  size_t reconnect_index = count;
+  pollfds[count++] = (struct pollfd){.fd = reconnect_button_fd,
+                                    .events = POLLIN | POLLHUP | POLLERR};
   uint8_t endpoint_numbers[MAX_ENDPOINT_NUMBER];
   size_t endpoint_indices[MAX_ENDPOINT_NUMBER];
   size_t endpoint_count = 0;
@@ -967,6 +1052,24 @@ static void service_virtual_usb(int timeout_ms) {
     if (pollfds[button_index].revents != 0) {
       buttonDrainEvents();
     }
+  }
+  if ((pollfds[reconnect_index].revents & ~POLLIN) != 0) {
+    die_message("reconnect button reported an unexpected poll event");
+  }
+  if ((pollfds[reconnect_index].revents & POLLIN) != 0) {
+    refresh_reconnect_state();
+  }
+  if (reconnect_pressed && !usb_ejected) {
+    unconfigure_until_quiesced();
+    return;
+  }
+  if (!reconnect_pressed && usb_ejected) {
+    if (!configure_until_endpoints(false)) {
+      die_message("supervisor rejected USB insertion");
+    }
+    usb_ejected = false;
+    fputs("virtual-trezor: KEY3 USB insertion completed\n", stderr);
+    return;
   }
   for (size_t i = 0; usb_enabled && i < endpoint_count; i++) {
     short events = pollfds[endpoint_indices[i]].revents;
@@ -1002,7 +1105,12 @@ static void service_virtual_usb_until_resumed(uint32_t firmware_timeout_ms) {
 
 void usbInit(void) {
   firmwareUsbInit();
-  if (!configure_until_endpoints(false)) {
+  refresh_reconnect_state();
+  if (reconnect_pressed) {
+    /* Initial empty Configure declares readiness without attaching USB. */
+    send_record(KIND_CONFIGURE, generation, configuration_request_id(), NULL, 0);
+    usb_ejected = true;
+  } else if (!configure_until_endpoints(false)) {
     die_message("initial USB configuration was rejected");
   }
   fputs(
@@ -1024,7 +1132,13 @@ void waitAndProcessUSBRequests(uint32_t millis) {
   controller_already_serviced = false;
 }
 
-void usbReconnect(void) { (void)configure_until_endpoints(true); }
+void usbReconnect(void) {
+  /* Firmware reconnect requests must not override a physical KEY3 hold. */
+  refresh_reconnect_state();
+  if (!usb_ejected && !reconnect_pressed) {
+    (void)configure_until_endpoints(true);
+  }
+}
 
 char usbTiny(char set) { return firmwareUsbTiny(set); }
 

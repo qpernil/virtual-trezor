@@ -107,11 +107,14 @@ process survives. The supervisor guarantees at least 250 ms between UDC detach
 and replacement bind. Invalid replacement CBOR is rejected before the active
 USB generation is disturbed.
 
-Safe 3 also uses the control channel's split reconnect form. A KEY3 press sends
+Both workers also use the control channel's split reconnect form. A KEY3 press sends
 an empty `Configure`, which unbinds and removes the active generation while the
-worker and firmware keep running. KEY3 release sends the genuine Core
+worker and firmware keep running. KEY3 release sends the genuine firmware
 personality again. The supervisor binds it immediately, making the physical
-hold the complete detached interval.
+hold the complete detached interval. Trezor One also starts detached when KEY3
+is held at startup and ignores firmware reconnect requests until release.
+Ejecting a suspended Trezor One resumes its timer and display so the running
+firmware cannot remain parked on an event from a retired USB generation.
 
 Host sleep is a normal firmware lifecycle, not a process restart. For the
 legacy worker, a `SUSPEND`/`RESUME` pair preserves the current generation and
