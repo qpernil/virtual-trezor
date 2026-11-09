@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="virtual-trezor-rng-") as temporary:
 #include <stdio.h>
 #include <stdlib.h>
 #define sectrue 1
-#define ensure(condition, message) do { if (!(condition)) abort(); } while (0)
+#define ensure(condition, message) do { if ((condition) != sectrue) abort(); } while (0)
 ''')
     (include / "rand.h").write_text("void random_buffer(uint8_t*, size_t);\n")
     (include / "sec/optiga.h").write_text("bool optiga_random_buffer(uint8_t*, size_t);\n")
