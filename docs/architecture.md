@@ -158,14 +158,14 @@ upstream datagram implementation nor an SDL object is present in the worker.
 ## Implementation status
 
 The Trezor One worker is complete for the current integration scope. It runs
-the genuine legacy `1.14.1` firmware with supervisor-managed FunctionFS USB,
+the genuine legacy `1.14.2` firmware with supervisor-managed FunctionFS USB,
 firmware-discovered WinUSB/WebUSB descriptors, direct endpoint handles,
 file-backed flash, selectable I2C/SPI displays, GPIO buttons, reconnect, and
 USB suspend/resume. Its SH1106 and SSD1306 paths have been exercised on the Pi
 and through the second-Pi SDL viewer; ST7789 is physically validated.
 
 The separate Safe 3 revision B worker is also complete for the current
-integration scope. It runs upstream Core `2.12.4` with its genuine
+integration scope. It runs upstream Core `2.13.0` with its genuine
 MicroPython/Rust UI, protocol and file-backed storage. Core constructs the
 typed USB personality, publishes an empty personality until `usb_start()`, and
 can remove/reinsert the gadget without restarting the worker. Its 128x64

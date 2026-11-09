@@ -13,4 +13,7 @@ git -C "$UPSTREAM_DIR" submodule update --init \
   vendor/secp256k1-zkp \
   vendor/ts-tvl
 
+# Align any dependencies already initialized by other build targets as well.
+git -C "$UPSTREAM_DIR" submodule update --recursive
+
 "$PROJECT_ROOT/scripts/check-upstream.sh"

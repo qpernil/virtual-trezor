@@ -11,8 +11,8 @@ documentation, signing material, or other confidential information was used.
 
 The official `trezor/trezor-firmware` repository is included as the
 `upstream/trezor-firmware` Git submodule, pinned to commit
-`30be4e8c9488eeab68f994af23b3d9c9b7334266` (`core/v2.12.4`, containing the
-current Trezor One 1.14.1 sources). This project does not rewrite or relicense
+`037e506db454691bda188df2803df2fc26c75f36` (`core/v2.13.0`, containing the
+current Trezor One 1.14.2 sources). This project does not rewrite or relicense
 that source. Its build replaces selected upstream emulator platform objects at
 link time without permanently patching the submodule.
 

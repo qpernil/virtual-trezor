@@ -83,7 +83,7 @@ export VIRTUAL_TREZOR_DISPLAY_LIBRARY="$DISPLAY_LIBRARY"
 
 CORE_OUTPUT="$DISPLAY_CARGO_TARGET/artifacts/T3B1/firmware-emu"
 test -x "$CORE_OUTPUT"
-if nm "$CORE_OUTPUT" | grep -E '[[:space:]]random_reseed$' >/dev/null; then
+if nm "$CORE_OUTPUT" | grep -E '[[:space:]](random_reseed|rng_reseed|rng_mock_reseed|rng_mock_fill|optiga_random_reseed|tropic_random_reseed)$' >/dev/null; then
   echo "Safe 3 worker unexpectedly contains the deterministic RNG reseed API" >&2
   exit 1
 fi

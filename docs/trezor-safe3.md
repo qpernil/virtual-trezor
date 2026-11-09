@@ -69,7 +69,10 @@ are always reversed afterward:
   implementations, removes SDL from headless targets, links the shared native
   libraries, and installs the virtual-WFI hook.
 - `safe3-secure-random.patch` replaces deterministic emulator reseeding with
-  the secure Unix RNG path backed by `/dev/urandom`.
+  OS CSPRNG reads from `/dev/urandom` for the MCU and emulated secure-element
+  paths. Entropy-use flags record completed reads; these paths share the OS
+  entropy source and are not independent physical TRNGs. Reseeding APIs and
+  deterministic mock generators are excluded from the worker.
 
 The pinned upstream submodule must be clean before and after every build.
 
@@ -96,7 +99,7 @@ loaded; it does not replace Core's application code or MicroPython runtime.
 
 ## Firmware and state
 
-The worker runs upstream model `T3B1` from Core release `2.12.4`. Core's
+The worker runs upstream model `T3B1` from Core release `2.13.0`. Core's
 file-backed Unix flash implementation remains genuine and is rooted through
 `TREZOR_PROFILE_DIR` at the profile's state directory:
 

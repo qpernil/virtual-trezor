@@ -65,12 +65,12 @@ installation, profile customization, and USB gadget startup.
 
 The supported configurations are:
 
-- the official Trezor One `legacy/v1.14.1` emulator builds from an unmodified,
-  pinned upstream checkout and passes a startup smoke test on macOS arm64;
+- the official Trezor One `1.14.2` emulator builds from the pinned upstream
+  checkout;
 - an aarch64 Raspberry Pi worker builds and runs that firmware behind the USB
   gadget supervisor, replacing UDP, desktop display, and desktop input with
   FunctionFS, I2C/SPI, and GPIO implementations;
-- the upstream Safe 3 revision B (`T3B1`) Core `2.12.4` firmware builds as a
+- the upstream Safe 3 revision B (`T3B1`) Core `2.13.0` firmware builds as a
   separate worker with its genuine MicroPython/Rust UI, file-backed state,
   USB personality, and protocol stack;
 - Safe 3 is physically validated on the 240x240 ST7789 HAT with GPIO buttons,
@@ -173,9 +173,9 @@ repository is a Git submodule at `upstream/trezor-firmware`, pinned to:
 
 | Item | Value |
 | --- | --- |
-| Core release | `core/v2.12.4` |
-| Legacy release level | `1.14.1` |
-| Commit | `30be4e8c9488eeab68f994af23b3d9c9b7334266` |
+| Core release | `core/v2.13.0` |
+| Legacy release level | `1.14.2` |
+| Commit | `037e506db454691bda188df2803df2fc26c75f36` |
 | Models | Trezor One / `T1B1`; Safe 3 rev B / `T3B1` |
 
 Initialize the submodule and only the dependencies needed by the Trezor One

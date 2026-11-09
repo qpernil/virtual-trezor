@@ -3,8 +3,7 @@
 #include <stdlib.h>
 
 /*
- * Legacy adapter for Core's secure Unix RNG path. This deliberately follows
- * core/embed/sys/rng/unix/rng.c: the firmware keeps calling random_buffer(),
+ * Legacy firmware adapter: the firmware keeps calling random_buffer(),
  * while the Unix platform supplies bytes from the kernel CSPRNG.
  */
 void random_buffer(uint8_t *buffer, size_t length) {

@@ -1,5 +1,5 @@
 diff --git a/core/embed/io/button/build.rs b/core/embed/io/button/build.rs
-index d59cdf35b0..5b83bb48a4 100644
+index d59cdf35b0..c1c276ffd6 100644
 --- a/core/embed/io/button/build.rs
 +++ b/core/embed/io/button/build.rs
 @@ -1,5 +1,10 @@
@@ -32,7 +32,7 @@ index d59cdf35b0..5b83bb48a4 100644
      } else if cfg!(feature = "mcu_stm32") {
          lib.add_source("button/stm32/button.c");
 diff --git a/core/embed/io/display/build.rs b/core/embed/io/display/build.rs
-index 1a1911e198..36b25c0573 100644
+index 57a7ff1b9d..5f607430b9 100644
 --- a/core/embed/io/display/build.rs
 +++ b/core/embed/io/display/build.rs
 @@ -1,5 +1,14 @@
@@ -61,7 +61,7 @@ index 1a1911e198..36b25c0573 100644
          // The emulator reuses the emulated board's display configuration (panel,
          // framebuffer) but always builds the unix driver instead of the HW one.
          add_driver_unix(lib)?;
-@@ -38,6 +49,24 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+@@ -40,6 +51,24 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
      Ok(())
  }
  
@@ -117,12 +117,12 @@ index ee83f8846e..cb586216c5 100644
          lib.add_sources(["usb/unix/sock.c", "usb/unix/usb.c", "usb/usb_config.c"]);
      } else if cfg!(feature = "mcu_stm32") {
          lib.add_sources([
-diff --git a/core/embed/projects/unix/build.rs b/core/embed/projects/unix/build.rs
-index 64590def26..e07581e4de 100644
---- a/core/embed/projects/unix/build.rs
-+++ b/core/embed/projects/unix/build.rs
+diff --git a/core/embed/projects/firmware/build.rs b/core/embed/projects/firmware/build.rs
+index 50091a725b..3bd9d31b63 100644
+--- a/core/embed/projects/firmware/build.rs
++++ b/core/embed/projects/firmware/build.rs
 @@ -1,5 +1,17 @@
- use xbuild::Result;
+ use xbuild::{CLibrary, Result, bail_unsupported};
  
 +fn link_virtual_trezor_library(variable: &str, name: &str) {
 +    use std::path::Path;
@@ -139,8 +139,8 @@ index 64590def26..e07581e4de 100644
  fn main() -> Result<()> {
      xbuild::build_and_link("firmware", |lib| {
          lib.import_lib("io")?;
-@@ -15,6 +27,19 @@ fn main() -> Result<()> {
-             lib.add_source("../../api/trezor_api_v1_impl.c");
+@@ -40,8 +52,21 @@ fn main() -> Result<()> {
+             bail_unsupported!()
          }
  
 +        if std::env::var_os("VIRTUAL_TREZOR_HEADLESS_DISPLAY").is_some() {
@@ -160,11 +160,13 @@ index 64590def26..e07581e4de 100644
 +    }
 +    Ok(())
  }
-diff --git a/core/embed/projects/unix/main_main.c b/core/embed/projects/unix/main_main.c
-index 7b766d9ffd..51cb5ff247 100644
---- a/core/embed/projects/unix/main_main.c
-+++ b/core/embed/projects/unix/main_main.c
-@@ -77,9 +77,11 @@
+ 
+ fn embed_kernel_binary(lib: &mut CLibrary) -> Result<()> {
+diff --git a/core/embed/projects/firmware/src/unix/main_main.c b/core/embed/projects/firmware/src/unix/main_main.c
+index 3587cc462e..e0f2258c6e 100644
+--- a/core/embed/projects/firmware/src/unix/main_main.c
++++ b/core/embed/projects/firmware/src/unix/main_main.c
+@@ -78,7 +78,9 @@
  #include <sec/mcu_attestation.h>
  #endif
  
@@ -172,11 +174,9 @@ index 7b766d9ffd..51cb5ff247 100644
  #include <SDL3/SDL.h>
 +#endif
  
- #include "version.h"
+ #include "../../version.h"
  
- static void drivers_deinit(void) { flash_deinit(); }
- 
-@@ -123,6 +125,7 @@ static void drivers_init(void) {
+@@ -131,6 +133,7 @@ static void drivers_init(void) {
  #endif
  }
  
@@ -184,7 +184,7 @@ index 7b766d9ffd..51cb5ff247 100644
  static uintptr_t throw_exit_exception_trampoline(uintptr_t code,
                                                   uintptr_t unused1,
                                                   uintptr_t unused2) {
-@@ -169,6 +172,7 @@ static bool sdl_event_filter(void *userdata, SDL_Event *event) {
+@@ -176,6 +179,7 @@ static bool sdl_event_filter(void *userdata, SDL_Event *event) {
    }
    return true;
  }
@@ -192,7 +192,7 @@ index 7b766d9ffd..51cb5ff247 100644
  
  // Can be used to get basic emulator properties before regularly starting it.
  // Needs to be called before it starts listening on UDP sockets in case there
-@@ -218,8 +222,10 @@ int main(int argc, char **argv) {
+@@ -246,8 +250,10 @@ int main(int argc, char **argv) {
      error_shutdown("Cannot start coreapp");
    }
  
@@ -204,10 +204,10 @@ index 7b766d9ffd..51cb5ff247 100644
    // Run the coreapp task
    applet_run(&coreapp);
 diff --git a/core/embed/sys/bsp/build.rs b/core/embed/sys/bsp/build.rs
-index 81bdea2015..3313aed141 100644
+index 02ac2a1ca2..993f0a0b84 100644
 --- a/core/embed/sys/bsp/build.rs
 +++ b/core/embed/sys/bsp/build.rs
-@@ -148,8 +148,10 @@ fn add_stm32f4_bsp(lib: &mut CLibrary) -> Result<()> {
+@@ -159,8 +159,10 @@ fn add_stm32f4_bsp(lib: &mut CLibrary) -> Result<()> {
  fn add_emulator_bsp(lib: &mut xbuild::CLibrary) -> Result<()> {
      lib.add_source("bsp/unix/profile.c");
  
@@ -221,7 +221,7 @@ index 81bdea2015..3313aed141 100644
      Ok(())
  }
 diff --git a/core/embed/sys/task/build.rs b/core/embed/sys/task/build.rs
-index 41d43a6467..fbb80017e3 100644
+index 94e996aec4..3cb408d614 100644
 --- a/core/embed/sys/task/build.rs
 +++ b/core/embed/sys/task/build.rs
 @@ -17,10 +17,17 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
@@ -244,10 +244,10 @@ index 41d43a6467..fbb80017e3 100644
          lib.add_sources([
              "task/stm32/coreapp.c",
 diff --git a/core/embed/sys/task/sysevent.c b/core/embed/sys/task/sysevent.c
-index ec28c62dbb..7b81d4236f 100644
+index bc6908b7b2..5a17ffba8e 100644
 --- a/core/embed/sys/task/sysevent.c
 +++ b/core/embed/sys/task/sysevent.c
-@@ -33,7 +33,11 @@
+@@ -33,10 +33,14 @@
  #include <sys/applet.h>
  #endif
  
@@ -255,12 +255,15 @@ index ec28c62dbb..7b81d4236f 100644
 +#if defined(TREZOR_EMULATOR) && !defined(VIRTUAL_TREZOR_HEADLESS_DISPLAY)
  #include <sys/unix/sdl_event.h>
  #endif
-+
+ 
 +#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
 +void virtual_trezor_wait_for_interrupt(uint32_t deadline);
 +#endif
- 
-@@ -229,7 +229,7 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
++
+ typedef struct {
+   // Waiting task
+   systask_t *task;
+@@ -229,7 +233,7 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
    }
  
    for (;;) {
@@ -269,7 +272,8 @@ index ec28c62dbb..7b81d4236f 100644
      // Poll SDL events and dispatch them
      sdl_events_poll();
  #endif
-@@ -288,8 +292,12 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
+@@ -287,8 +291,12 @@ void sysevents_poll(const sysevents_t *awaited, sysevents_t *signalled,
+ 
      if (!events_processed) {
  #ifdef TREZOR_EMULATOR
 +#ifdef VIRTUAL_TREZOR_SUPERVISOR_USB
@@ -281,4 +285,3 @@ index ec28c62dbb..7b81d4236f 100644
  #else
        // Wait for the next event
        __WFI();
- #endif

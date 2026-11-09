@@ -1,6 +1,10 @@
 # Upstream build baseline
 
-## Verified revision
+## Historical upstream baseline
+
+This records the macOS baseline checked before the current release pin. Current
+source versions are listed in the main README; this result does not qualify a
+newer firmware release.
 
 | Item | Value |
 | --- | --- |

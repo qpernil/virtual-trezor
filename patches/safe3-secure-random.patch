@@ -1,30 +1,148 @@
-diff --git a/core/embed/rtl/Cargo.toml b/core/embed/rtl/Cargo.toml
-index 81ee9a8238..a09849317b 100644
---- a/core/embed/rtl/Cargo.toml
-+++ b/core/embed/rtl/Cargo.toml
-@@ -20,7 +20,7 @@ models.workspace = true
+diff --git a/core/embed/sec/optiga/unix/optiga_mock.c b/core/embed/sec/optiga/unix/optiga_mock.c
+index 347c1a5094..586e9ceb7a 100644
+--- a/core/embed/sec/optiga/unix/optiga_mock.c
++++ b/core/embed/sec/optiga/unix/optiga_mock.c
+@@ -21,6 +21,8 @@
  
- aes_gcm = []
- ed25519_no_precomp = []
--emulator = ["insecure_prng", "models/emulator"]
-+emulator = ["models/emulator"]
- eos = []
- insecure_prng = []
- mldsa = []
+ #include <sec/optiga.h>
+ #include <sys/rng_mock.h>
++#include <sys/rng.h>
++#include <sys/rng_use_flags.h>
+ 
+ // Guard against this file ever being compiled into a bare-metal build.
+ // These checks are intentionally duplicated across all mock RNGs to prevent
+@@ -55,4 +57,12 @@ bool optiga_random_buffer(uint8_t* dest, size_t size) {
+   return true;
+ }
+ 
++#else
++
++bool optiga_random_buffer(uint8_t* dest, size_t size) {
++  rng_fill_buffer(dest, size);
++  rng_use_flag_set(RNG_TYPE_OPTIGA);
++  return true;
++}
++
+ #endif  // USE_INSECURE_PRNG
+diff --git a/core/embed/sec/tropic/unix/tropic_mock.c b/core/embed/sec/tropic/unix/tropic_mock.c
+index 2f73cb8cf2..df85f66a3d 100644
+--- a/core/embed/sec/tropic/unix/tropic_mock.c
++++ b/core/embed/sec/tropic/unix/tropic_mock.c
+@@ -21,6 +21,8 @@
+ 
+ #include <sec/tropic.h>
+ #include <sys/rng_mock.h>
++#include <sys/rng.h>
++#include <sys/rng_use_flags.h>
+ 
+ #ifndef TREZOR_EMULATOR
+ #error "Mock RNG must not be compiled into a non-emulator build"
+@@ -61,4 +63,15 @@ bool tropic_random_buffer(void* buffer, size_t length) {
+   return true;
+ }
+ 
++#else
++
++bool tropic_random_buffer(void* buffer, size_t length) {
++  if (!tropic_session_start()) {
++    return false;
++  }
++  rng_fill_buffer(buffer, length);
++  rng_use_flag_set(RNG_TYPE_TROPIC);
++  return true;
++}
++
+ #endif  // USE_INSECURE_PRNG
+diff --git a/core/embed/sys/rng/build.rs b/core/embed/sys/rng/build.rs
+index f768d805e0..084b6ca167 100644
+--- a/core/embed/sys/rng/build.rs
++++ b/core/embed/sys/rng/build.rs
+@@ -4,12 +4,10 @@ pub fn def_module(lib: &mut CLibrary) -> Result<()> {
+     lib.add_include("rng/inc");
+ 
+     if cfg!(feature = "emulator") {
+-        lib.add_define("USE_INSECURE_PRNG", Some("1"));
+-
++        lib.add_define("VIRTUAL_TREZOR_OS_RNG", Some("1"));
+         lib.add_sources([
+             "rng/unix/rng.c",
+-            "rng/unix/rng_use_flags.c",
+-            "rng/unix/rng_mock.c",
++            "rng/stm32/rng_use_flags.c",
+         ]);
+     } else if cfg!(feature = "mcu_stm32") {
+         lib.add_sources(["rng/stm32/rng.c", "rng/stm32/rng_use_flags.c"]);
+diff --git a/core/embed/sys/rng/inc/sys/rng_use_flags.h b/core/embed/sys/rng/inc/sys/rng_use_flags.h
+index 6d634e0c9c..61548454cc 100644
+--- a/core/embed/sys/rng/inc/sys/rng_use_flags.h
++++ b/core/embed/sys/rng/inc/sys/rng_use_flags.h
+@@ -41,13 +41,13 @@ typedef enum {
+  */
+ void rng_use_flags_clear(void);
+ 
+-#ifndef TREZOR_EMULATOR
++#if !defined(TREZOR_EMULATOR) || defined(VIRTUAL_TREZOR_OS_RNG)
+ /**
+  * @brief Marks the specified RNG type as used.
+  *
+  * @note This function is intentionally unavailable in emulator builds. Code
+- * using a PRNG must not call it; it may only be called by real TRNG
+- * implementations in hardware builds.
++ * using a deterministic PRNG must not call it. The virtual worker records
++ * completed OS CSPRNG reads, not independent physical TRNGs.
+  */
+ void rng_use_flag_set(rng_type_t type);
+ #endif
+diff --git a/core/embed/sys/rng/unix/rng.c b/core/embed/sys/rng/unix/rng.c
+index 1a3f4a1fd4..33b7d9b3e8 100644
+--- a/core/embed/sys/rng/unix/rng.c
++++ b/core/embed/sys/rng/unix/rng.c
+@@ -20,6 +20,7 @@
+ #include <trezor_rtl.h>
+ 
+ #include <sys/rng.h>
++#include <sys/rng_use_flags.h>
+ #include <sys/rng_mock.h>
+ 
+ #include "rand.h"
+@@ -54,8 +55,22 @@ void rng_fill_buffer(void* buffer, size_t buffer_size) {
+   rng_mock_fill(&random_stream, (uint8_t*)buffer, buffer_size);
+ }
+ 
++#else
++
++void rng_fill_buffer(void* buffer, size_t buffer_size) {
++  static FILE* random_source = NULL;
++  if (random_source == NULL) {
++    random_source = fopen("/dev/urandom", "rb");
++  }
++  ensure(sectrue * (random_source != NULL), "fopen /dev/urandom failed");
++  ensure(sectrue * (fread(buffer, 1, buffer_size, random_source) == buffer_size),
++         "read /dev/urandom failed");
++  rng_use_flag_set(RNG_TYPE_MCU);
++}
++
++#endif  // USE_INSECURE_PRNG
++
+ // Implements random_buffer() function declared in crypto/rand.h
+ // as a wrapper for rng_fill_buffer().
+ void random_buffer(uint8_t* buf, size_t len) { rng_fill_buffer(buf, len); }
+ 
+-#endif  // USE_INSECURE_PRNG
 diff --git a/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h b/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
-index 39061ea2c2..538fddca52 100644
+index 23db16dd51..f190e6d745 100644
 --- a/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
 +++ b/core/embed/upymod/modtrezorcrypto/modtrezorcrypto-random.h
-@@ -95,7 +95,7 @@ STATIC mp_obj_t mod_trezorcrypto_random_shuffle(mp_obj_t data) {
- STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_trezorcrypto_random_shuffle_obj,
+@@ -91,7 +91,7 @@ static mp_obj_t mod_trezorcrypto_random_shuffle(mp_obj_t data) {
+ static MP_DEFINE_CONST_FUN_OBJ_1(mod_trezorcrypto_random_shuffle_obj,
                                   mod_trezorcrypto_random_shuffle);
  
 -#ifdef TREZOR_EMULATOR
 +#ifdef USE_INSECURE_PRNG
- /// def reseed(value: int) -> None:
- ///     """
- ///     Re-seed the RNG with given value.
-@@ -116,7 +116,7 @@ STATIC const mp_rom_map_elem_t mod_trezorcrypto_random_globals_table[] = {
+ 
+ #if USE_OPTIGA
+ #include <sec/optiga.h>
+@@ -127,7 +127,7 @@ static const mp_rom_map_elem_t mod_trezorcrypto_random_globals_table[] = {
       MP_ROM_PTR(&mod_trezorcrypto_random_bytes_obj)},
      {MP_ROM_QSTR(MP_QSTR_shuffle),
       MP_ROM_PTR(&mod_trezorcrypto_random_shuffle_obj)},
@@ -33,17 +151,3 @@ index 39061ea2c2..538fddca52 100644
      {MP_ROM_QSTR(MP_QSTR_reseed),
       MP_ROM_PTR(&mod_trezorcrypto_random_reseed_obj)},
  #endif
-diff --git a/core/embed/sys/rng/unix/rng.c b/core/embed/sys/rng/unix/rng.c
-index 071eece2f0..b80e8c1898 100644
---- a/core/embed/sys/rng/unix/rng.c
-+++ b/core/embed/sys/rng/unix/rng.c
-@@ -42,2 +42,9 @@ void rng_fill_buffer(void* buffer, size_t buffer_size) {
- #endif
- }
-+
-+#ifndef USE_INSECURE_PRNG
-+// Keep vendor/trezor-crypto on the same RNG source as the Core HAL.
-+void random_buffer(uint8_t* buffer, size_t buffer_size) {
-+  rng_fill_buffer(buffer, buffer_size);
-+}
-+#endif

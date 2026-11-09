@@ -3,7 +3,7 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 
 .DEFAULT_GOAL := check
 
-.PHONY: all check check-platform check-upstream check-worker-boundary init \
+.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random init \
 	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
 	safe3-usb worker
 
@@ -14,7 +14,7 @@ init:
 
 init-baseline: init
 
-check: check-upstream check-worker-boundary check-platform
+check: check-upstream check-worker-boundary check-platform check-safe3-random
 
 check-upstream:
 	./scripts/check-upstream.sh
@@ -43,9 +43,9 @@ check-worker-boundary:
 		mk/worker-firmware.mk
 	@grep -q 'fopen("/dev/urandom", "rb")' \
 		platform/raspberry-pi/random_linux.c
-	@grep -Fq 'emulator = ["models/emulator"]' \
+	@grep -Fq 'rng_use_flag_set(RNG_TYPE_MCU)' \
 		patches/safe3-secure-random.patch
-	@grep -q 'void random_buffer(uint8_t\* buffer' \
+	@grep -q 'fopen("/dev/urandom", "rb")' \
 		patches/safe3-secure-random.patch
 	@grep -q 'display_backends_create' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE' platform/raspberry-pi/display_linux.c
@@ -76,6 +76,9 @@ check-worker-boundary:
 		platform/raspberry-pi/display_linux.c
 	@! grep -q 'platform_sdl\|emulator/oled.c' mk/worker-firmware.mk
 	@echo "Worker boundary replaces UDP, SDL display, and SDL buttons."
+
+check-safe3-random:
+	python3 tests/test_safe3_random.py
 
 check-platform:
 	@mkdir -p build/tests

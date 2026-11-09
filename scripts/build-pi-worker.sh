@@ -35,7 +35,7 @@ fi
 
 PROTOC_VERSION="$("$PROTOC_WRAPPER" --version)"
 if [[ "$PROTOC_VERSION" != "libprotoc 33.5" ]]; then
-  echo "Trezor v1.14.1 requires protoc 33.5; $PROTOC_TOOL provides: $PROTOC_VERSION" >&2
+  echo "Trezor v1.14.2 requires protoc 33.5; $PROTOC_TOOL provides: $PROTOC_VERSION" >&2
   exit 1
 fi
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
