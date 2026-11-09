@@ -7,9 +7,6 @@ CORE_DIR="$UPSTREAM_DIR/core"
 DISPLAY_BACKENDS_DIR="${DISPLAY_BACKENDS_DIR:-$PROJECT_ROOT/../display-backends}"
 DISPLAY_BUILD_DIR="${SAFE3_DISPLAY_BUILD_DIR:-$PROJECT_ROOT/build/safe3-t3b1-display}"
 DISPLAY_CARGO_TARGET="$DISPLAY_BUILD_DIR/cargo-target"
-OVERLAY_PATCH="$PROJECT_ROOT/patches/safe3-headless-display.patch"
-RANDOM_PATCH="$PROJECT_ROOT/patches/safe3-secure-random.patch"
-RUST_COMPAT_PATCH="$PROJECT_ROOT/patches/safe3-stable-rust.patch"
 DISPLAY_LIBRARY="$DISPLAY_BACKENDS_DIR/target/release/libdisplay_backends.so"
 BUTTON_SOURCE="${SAFE3_BUTTON_SOURCE:-$PROJECT_ROOT/platform/safe3/button_headless.c}"
 BUTTON_RESOURCES_SOURCE="${SAFE3_BUTTON_RESOURCES_SOURCE:-}"
@@ -53,20 +50,11 @@ test -f "$DISPLAY_LIBRARY"
 
 mkdir -p "$DISPLAY_BUILD_DIR" "$DISPLAY_CARGO_TARGET"
 
-git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH" "$RANDOM_PATCH" "$RUST_COMPAT_PATCH"
-git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH" "$RANDOM_PATCH" "$RUST_COMPAT_PATCH"
-overlay_applied=true
-cleanup() {
-  if [[ "${overlay_applied:-false}" == true ]]; then
-    git -C "$UPSTREAM_DIR" apply -R "$RUST_COMPAT_PATCH" "$RANDOM_PATCH" "$OVERLAY_PATCH"
-  fi
-}
-trap cleanup EXIT
-
 export PATH="$PROJECT_ROOT/tools/safe3-rust:$PROJECT_ROOT/tools:$UPSTREAM_DIR/.venv/bin:$PATH"
 export CARGO_TARGET_DIR="$DISPLAY_CARGO_TARGET"
 export CFLAGS="${CFLAGS:+$CFLAGS }-Wno-error=unterminated-string-initialization"
 export VIRTUAL_TREZOR_HEADLESS_DISPLAY=1
+export VIRTUAL_TREZOR_OS_RNG=1
 export VIRTUAL_TREZOR_DISPLAY_SOURCE="$PROJECT_ROOT/platform/safe3/display_core.c"
 export VIRTUAL_TREZOR_DISPLAY_RESOURCES_SOURCE="$PROJECT_ROOT/platform/safe3/display_resources.c"
 export VIRTUAL_TREZOR_DISPLAY_CONFIG_SOURCE="$PROJECT_ROOT/platform/raspberry-pi/worker_config.c"

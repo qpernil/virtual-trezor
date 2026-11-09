@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Compile the actual RNG overlay and exercise OS entropy and failure paths."""
+"""Compile the firmware fork RNG sources and exercise OS entropy and failure paths."""
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import tempfile
 
 PROJECT = Path(__file__).resolve().parents[1]
 UPSTREAM = PROJECT / "upstream/trezor-firmware"
-PATCH = PROJECT / "patches/safe3-secure-random.patch"
 
 
 def run(*args, **kwargs):
@@ -17,15 +17,15 @@ def run(*args, **kwargs):
 
 with tempfile.TemporaryDirectory(prefix="virtual-trezor-rng-") as temporary:
     root = Path(temporary)
-    paths = [line[6:] for line in PATCH.read_text().splitlines() if line.startswith("+++ b/")]
-    paths += ["core/embed/sys/rng/stm32/rng_use_flags.c",
-              "core/embed/sys/rng/inc/sys/rng.h",
-              "core/embed/sys/rng/inc/sys/rng_mock.h"]
+    paths = ["sys/rng/unix/rng.c", "sys/rng/stm32/rng_use_flags.c",
+             "sys/rng/inc/sys/rng.h", "sys/rng/inc/sys/rng_mock.h",
+             "sys/rng/inc/sys/rng_use_flags.h",
+             "sec/optiga/unix/optiga_mock.c", "sec/tropic/unix/tropic_mock.c"]
     for name in paths:
-        dest = root / name
+        relative = Path("core/embed") / name
+        dest = root / relative
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(subprocess.check_output(["git", "show", f"HEAD:{name}"], cwd=UPSTREAM))
-    run(["git", "apply", str(PATCH)], cwd=root)
+        shutil.copyfile(UPSTREAM / relative, dest)
     include = root / "include"
     (include / "sec").mkdir(parents=True)
     (include / "trezor_types.h").write_text("#pragma once\n#include <stdint.h>\n#include <stdbool.h>\n#include <stddef.h>\n")
@@ -56,4 +56,4 @@ with tempfile.TemporaryDirectory(prefix="virtual-trezor-rng-") as temporary:
     forbidden = {"rng_reseed", "rng_mock_reseed", "rng_mock_fill", "random_reseed",
                  "optiga_random_reseed", "tropic_random_reseed"}
     assert not any(line.split()[-1].lstrip("_") in forbidden for line in symbols.splitlines() if line.split())
-print("Safe3 RNG overlay: entropy paths, use flags, failure handling, and no reseeding passed")
+print("Safe3 fork RNG: entropy paths, use flags, failure handling, and no reseeding passed")

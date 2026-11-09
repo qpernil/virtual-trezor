@@ -7,12 +7,12 @@ and installing the matching supervisor.
 
 ## Verified build baseline
 
-Core `2.13.0` / legacy `1.14.2`, upstream commit
-`037e506db454691bda188df2803df2fc26c75f36`, is build-validated on `gadget-host`
+Core `2.13.0` / legacy `1.14.2`, firmware fork commit
+`ace9215f2c09a43438fd2a33b11f9888355c5cd7`, is build-validated on `gadget-host`
 (AArch64 Linux) with Rust `1.99.1`. Both `make safe3-usb` and `make worker`
 complete, and `make check` passes on Linux and macOS. The checks include the
 ported RNG paths, entropy-source failure handling, absence of reseeding
-symbols, and clean application of all build overlays.
+symbols, and the exact firmware fork pin.
 
 The Safe 3 binary resolves both bundled project libraries; those copies match
 the freshly built dependencies. All seven installed Trezor profiles on

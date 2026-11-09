@@ -62,22 +62,23 @@ features. The build therefore applies the narrowly scoped
 `RUSTC_BOOTSTRAP=1` environment setting while still using stable Rust 1.99 or newer. It
 records the upstream revision and Rust version beside each artifact.
 
-Three checked project overlays are applied only while a Safe 3 target builds and
-are always reversed afterward:
+The pinned firmware fork carries the integration as ordinary commits:
 
-- `safe3-headless-display.patch` selects the project display, button and USB
-  implementations, removes SDL from headless targets, links the shared native
-  libraries, and installs the virtual-WFI hook.
-- `safe3-secure-random.patch` replaces deterministic emulator reseeding with
-  OS CSPRNG reads from `/dev/urandom` for the MCU and emulated secure-element
-  paths. Entropy-use flags record completed reads; these paths share the OS
-  entropy source and are not independent physical TRNGs. Reseeding APIs and
-  deterministic mock generators are excluded from the worker.
-- `safe3-stable-rust.patch` adapts the experimental const-trait implementation
-  syntax to stable Rust 1.99.1, the tested compiler. It also applies to the
-  SDL baseline; it changes no runtime behavior.
+- Hardware hooks select the project display, button and USB implementations,
+  remove SDL from headless targets, link the shared native libraries, and
+  install the virtual-WFI hook.
+- `VIRTUAL_TREZOR_OS_RNG=1`, set by every headless worker build, selects OS
+  CSPRNG reads from `/dev/urandom` for the MCU and emulated secure-element
+  paths. Entropy-use flags record completed reads from the same OS entropy
+  source, not independent physical TRNGs. Reseeding APIs and deterministic
+  generators are excluded from worker binaries. The SDL baseline retains
+  upstream deterministic randomness when this explicit opt-in is absent.
+- The const-trait implementation uses the syntax accepted by stable Rust
+  `1.99.1`, the tested compiler, including for the SDL baseline.
 
-The pinned upstream submodule must be clean before and after every build.
+Builds neither apply nor reverse patches. The pinned firmware submodule must
+be clean before and after every build. Fork provenance and update policy are
+in its `VIRTUAL_TREZOR.md`.
 
 ## MicroPython execution model
 
@@ -191,7 +192,7 @@ Unix emulator's `sysevents_poll()` probes every source and, when none is ready,
 calls `systick_delay_ms(1)` before repeating the complete probe. Waking about a
 thousand times per second has a measurable idle cost.
 
-The Safe 3 build overlay changes only that no-event branch when
+The firmware fork changes only that no-event branch when
 `VIRTUAL_TREZOR_SUPERVISOR_USB` is enabled. It calls
 `virtual_trezor_wait_for_interrupt(deadline)`, passing the deadline already
 computed by Core. The Linux implementation calculates the remaining firmware

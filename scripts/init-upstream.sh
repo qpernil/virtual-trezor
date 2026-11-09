@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPSTREAM_DIR="$PROJECT_ROOT/upstream/trezor-firmware"
 
+git -C "$PROJECT_ROOT" submodule sync -- upstream/trezor-firmware
 git -C "$PROJECT_ROOT" submodule update --init upstream/trezor-firmware
 
 git -C "$UPSTREAM_DIR" submodule update --init \

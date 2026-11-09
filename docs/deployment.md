@@ -91,7 +91,7 @@ make safe3-usb
 This produces `build/safe3-t3b1-usb/virtual-trezor-safe3-usb` and its two
 co-located shared libraries. Safe 3 uses stable Rust 1.99 or newer with
 the narrowly scoped bootstrap flag required by upstream Core nightly
-features and the project const-trait syntax overlay. Rust 1.99.1 is the
+features and the fork's const-trait syntax adaptation. Rust 1.99.1 is the
 verified compiler.
 
 The diagnostic `make safe3-baseline` target retains upstream SDL/UDP and also

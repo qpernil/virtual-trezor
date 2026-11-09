@@ -3,7 +3,7 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 
 .DEFAULT_GOAL := check
 
-.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random check-patches init \
+.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random init \
 	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
 	safe3-usb worker
 
@@ -14,7 +14,7 @@ init:
 
 init-baseline: init
 
-check: check-upstream check-worker-boundary check-platform check-safe3-random check-patches
+check: check-upstream check-worker-boundary check-platform check-safe3-random
 
 check-upstream:
 	./scripts/check-upstream.sh
@@ -44,23 +44,23 @@ check-worker-boundary:
 	@grep -q 'fopen("/dev/urandom", "rb")' \
 		platform/raspberry-pi/random_linux.c
 	@grep -Fq 'rng_use_flag_set(RNG_TYPE_MCU)' \
-		patches/safe3-secure-random.patch
+		upstream/trezor-firmware/core/embed/sys/rng/unix/rng.c
 	@grep -q 'fopen("/dev/urandom", "rb")' \
-		patches/safe3-secure-random.patch
+		upstream/trezor-firmware/core/embed/sys/rng/unix/rng.c
 	@grep -q 'display_backends_create' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO1_MSB_REVERSE_PAGE' platform/raspberry-pi/display_linux.c
 	@grep -q 'DISPLAY_BACKENDS_MONO8' platform/safe3/display_core.c
 	@grep -q 'display_backends_write_frame' platform/safe3/display_core.c
 	@grep -q 'VIRTUAL_TREZOR_DISPLAY_CONFIG_SOURCE' \
-		scripts/build-safe3-display.sh patches/safe3-headless-display.patch
+		scripts/build-safe3-display.sh upstream/trezor-firmware/core/embed/io/display/build.rs
 	@grep -q 'display-ssd1306-i2c' platform/safe3/usb_supervisor.c
 	@grep -q 'display-sh1106-i2c' platform/safe3/usb_supervisor.c
 	@grep -q 'display-sh1106-spi' platform/safe3/usb_supervisor.c
 	@grep -q 'display-st7789-spi' platform/safe3/usb_supervisor.c
 	@grep -q 'virtual_trezor_wait_for_interrupt' \
-		platform/safe3/usb_supervisor.c patches/safe3-headless-display.patch
+		platform/safe3/usb_supervisor.c upstream/trezor-firmware/core/embed/sys/task/sysevent.c
 	@grep -q 'VIRTUAL_TREZOR_HEADLESS_DISPLAY' \
-		patches/safe3-headless-display.patch
+		upstream/trezor-firmware/core/embed/projects/firmware/build.rs
 	@! grep -q '#include .*SDL' platform/safe3/button_gpio.c \
 		platform/safe3/button_headless.c \
 		platform/safe3/button_resources.c platform/safe3/display_core.c \
@@ -76,12 +76,6 @@ check-worker-boundary:
 		platform/raspberry-pi/display_linux.c
 	@! grep -q 'platform_sdl\|emulator/oled.c' mk/worker-firmware.mk
 	@echo "Worker boundary replaces UDP, SDL display, and SDL buttons."
-
-check-patches:
-	git -C upstream/trezor-firmware apply --check --whitespace=error-all \
-		../../patches/safe3-headless-display.patch \
-		../../patches/safe3-secure-random.patch \
-		../../patches/safe3-stable-rust.patch
 
 check-safe3-random:
 	python3 tests/test_safe3_random.py

@@ -108,7 +108,7 @@ replacing the Raspberry Pi hardware boundary:
 - send the unchanged framebuffer either to an SSD1306/SH1106 I2C display at
   address `0x3c`, a factory-configured SH1106 SPI HAT, or a 240x240 ST7789 SPI
   HAT;
-- do not patch the upstream submodule.
+- consume committed firmware from the pinned fork without modifying the submodule during builds.
 
 Trezor Suite recognizes the Trezor One worker, can initialize its simulated state, and
 reaches on-device confirmation workflows. Production Suite reports the
@@ -169,15 +169,17 @@ See [`docs/architecture.md`](docs/architecture.md),
 
 ## Upstream source
 
-The official
-[`trezor/trezor-firmware`](https://github.com/trezor/trezor-firmware)
-repository is a Git submodule at `upstream/trezor-firmware`, pinned to:
+The maintained
+[`qpernil/trezor-firmware`](https://github.com/qpernil/trezor-firmware) fork
+is a Git submodule at `upstream/trezor-firmware`. Its integration changes are
+ordinary commits based on the official Trezor release:
 
 | Item | Value |
 | --- | --- |
 | Core release | `core/v2.13.0` |
 | Legacy release level | `1.14.2` |
-| Commit | `037e506db454691bda188df2803df2fc26c75f36` |
+| Fork commit | `ace9215f2c09a43438fd2a33b11f9888355c5cd7` |
+| Upstream base | `037e506db454691bda188df2803df2fc26c75f36` |
 | Models | Trezor One / `T1B1`; Safe 3 rev B / `T3B1` |
 
 Initialize the submodule and only the dependencies needed by the Trezor One
