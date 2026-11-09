@@ -3,6 +3,9 @@
 /* Exercise the actual controller with a socketpair supervisor and pipe GPIO
  * edges. Only hardware/firmware boundaries are substituted. No USB or wallet
  * hardware is accessed by this test. */
+#define _GNU_SOURCE
+#include "../upstream/trezor-firmware/legacy/emulator/emulator.h"
+
 #define getenv test_getenv
 #define chdir test_chdir
 #define geteuid test_geteuid
