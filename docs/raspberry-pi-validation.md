@@ -16,11 +16,24 @@ symbols, and the exact firmware fork pin.
 
 The Safe 3 binary resolves both bundled project libraries; those copies match
 the freshly built dependencies. All seven installed Trezor profiles on
-`gadget-host` pass supervisor schema validation and remain inactive. This validates
-builds and configuration, not physical USB, display, button, or persistent-state
-migration behavior on this release. Earlier physical measurements below used
-Core `2.12.4` and legacy `1.14.1`; repeat the checklist to qualify the new release
-on hardware.
+`gadget-host` pass supervisor schema validation.
+
+Physical USB smoke tests on `gadget-host` with the ST7789 profiles verify:
+
+- Trezor One enumerates on macOS, reports model `1` and firmware `1.14.2`,
+  reads its existing initialized state, and returns a 168-byte ping unchanged.
+  Its upstream Ping field has a 256-byte storage limit including the terminator.
+- Safe 3 enumerates on macOS, reports `T3B1` and Core `2.13.0`, and returns a
+  528-byte ping unchanged. Its test state is uninitialized.
+- Safe 3 KEY3 press/release cycles detach and reattach USB without restarting
+  the worker. The display shows `NO USB CONNECTION` while ejected, as confirmed
+  by direct observation. Both worker services run without automatic restarts.
+
+These checks do not qualify wallet operations, initialized Safe 3 state
+migration, every display/button workflow, or suspend/idle performance. Earlier
+physical measurements below used Core `2.12.4` and legacy `1.14.1`; repeat the
+remaining checklist for this release. Activation is temporary and does not
+change the enabled boot profile.
 
 ## Build and profile
 

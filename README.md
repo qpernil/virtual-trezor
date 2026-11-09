@@ -1,5 +1,7 @@
 # Virtual Trezor
 
+Hostnames and device/account identifiers below are illustrative; replace them with your own configured values.
+
 [![CI](https://github.com/qpernil/virtual-trezor/actions/workflows/ci.yml/badge.svg)](https://github.com/qpernil/virtual-trezor/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#current-status)
@@ -84,8 +86,10 @@ The supported configurations are:
   readiness, a GPIO edge, or the remaining time on Core's virtual timer
   expires.
 
-Current release builds and configuration are verified; physical measurements
-above were made with the earlier release. See the verification scope and
+Current release builds, configuration, USB feature queries and multi-packet
+pings are verified on `gadget-host`; Safe 3 KEY3 eject/reinsert is also verified.
+The performance and broader UI measurements above used the earlier release.
+See the verification scope and
 current acceptance checklist in
 [`docs/raspberry-pi-validation.md`](docs/raspberry-pi-validation.md) to verify
 enumeration, resource confinement, transport, UI, and worker-incarnation
