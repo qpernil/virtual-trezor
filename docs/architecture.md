@@ -136,7 +136,7 @@ boot instead of a software event.
 
 Core's hardware scheduler executes `WFI` when no source is ready. The standard
 Unix emulator's `sysevents_poll()` sleeps for one millisecond and repeats its
-source probes. The exact unmodified SDL/UDP emulator averages 9.85% of one Pi 4
+source probes. The measured Core 2.12.4 SDL/UDP emulator averages 9.85% of one Pi 4
 core at a settled home screen, but only about 1.7% on an M-series Mac. The
 simple one-millisecond delay is therefore inexpensive on a modern desktop and
 material on the Pi. In the supervisor build, the exact no-event branch calls

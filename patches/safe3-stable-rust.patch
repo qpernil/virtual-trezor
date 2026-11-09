@@ -1,0 +1,13 @@
+diff --git a/core/embed/rust/src/micropython/qstr_generated.rs b/core/embed/rust/src/micropython/qstr_generated.rs
+index f2f06fbaa9..2ffe734c32 100644
+--- a/core/embed/rust/src/micropython/qstr_generated.rs
++++ b/core/embed/rust/src/micropython/qstr_generated.rs
+@@ -22,7 +22,7 @@ impl Qstr {
+     }
+ }
+ 
+-impl const qstr::QstrValue for Qstr {
++const impl qstr::QstrValue for Qstr {
+     fn from_u16(val: u16) -> Self {
+         Self::from_u16(val)
+     }

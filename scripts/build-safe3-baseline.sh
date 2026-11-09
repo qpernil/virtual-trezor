@@ -16,7 +16,7 @@ fi
 
 "$PROJECT_ROOT/scripts/check-upstream.sh"
 
-for tool in cargo make rustc uv; do
+for tool in cargo make rustc rustup uv; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required Safe 3 build tool: $tool" >&2
     exit 1
@@ -33,14 +33,19 @@ git -C "$UPSTREAM_DIR" submodule update --init --recursive \
   vendor/secp256k1-zkp \
   vendor/ts-tvl
 
-RUST_VERSION="$(rustc --version)"
+RUST_VERSION="$(rustup run stable rustc --version)"
 RUST_NUMBER="${RUST_VERSION#rustc }"
 RUST_NUMBER="${RUST_NUMBER%% *}"
 IFS=. read -r RUST_MAJOR RUST_MINOR RUST_PATCH <<< "$RUST_NUMBER"
-if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 && RUST_MINOR < 95) )); then
-  echo "Safe 3 project builds require stable Rust 1.95 or newer; got: $RUST_VERSION" >&2
+if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 && RUST_MINOR < 99) )); then
+  echo "Safe 3 project builds require stable Rust 1.99 or newer; got: $RUST_VERSION" >&2
   exit 1
 fi
+
+RUST_PATCH="$PROJECT_ROOT/patches/safe3-stable-rust.patch"
+git -C "$UPSTREAM_DIR" apply --check "$RUST_PATCH"
+git -C "$UPSTREAM_DIR" apply "$RUST_PATCH"
+trap 'git -C "$UPSTREAM_DIR" apply -R "$RUST_PATCH"' EXIT
 
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 

@@ -9,6 +9,7 @@ DISPLAY_BUILD_DIR="${SAFE3_DISPLAY_BUILD_DIR:-$PROJECT_ROOT/build/safe3-t3b1-dis
 DISPLAY_CARGO_TARGET="$DISPLAY_BUILD_DIR/cargo-target"
 OVERLAY_PATCH="$PROJECT_ROOT/patches/safe3-headless-display.patch"
 RANDOM_PATCH="$PROJECT_ROOT/patches/safe3-secure-random.patch"
+RUST_PATCH="$PROJECT_ROOT/patches/safe3-stable-rust.patch"
 DISPLAY_LIBRARY="$DISPLAY_BACKENDS_DIR/target/release/libdisplay_backends.so"
 BUTTON_SOURCE="${SAFE3_BUTTON_SOURCE:-$PROJECT_ROOT/platform/safe3/button_headless.c}"
 BUTTON_RESOURCES_SOURCE="${SAFE3_BUTTON_RESOURCES_SOURCE:-}"
@@ -22,7 +23,7 @@ if [[ "$(uname -s)" != Linux ]]; then
   exit 1
 fi
 
-for tool in cargo make nm rustc strings uv; do
+for tool in cargo make nm rustc rustup strings uv; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required Safe 3 build tool: $tool" >&2
     exit 1
@@ -36,12 +37,12 @@ git -C "$UPSTREAM_DIR" submodule update --init --recursive \
   vendor/secp256k1-zkp \
   vendor/ts-tvl
 
-RUST_VERSION="$(rustc --version)"
+RUST_VERSION="$(rustup run stable rustc --version)"
 RUST_NUMBER="${RUST_VERSION#rustc }"
 RUST_NUMBER="${RUST_NUMBER%% *}"
 IFS=. read -r RUST_MAJOR RUST_MINOR RUST_PATCH <<< "$RUST_NUMBER"
-if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 && RUST_MINOR < 95) )); then
-  echo "Safe 3 project builds require stable Rust 1.95 or newer; got: $RUST_VERSION" >&2
+if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 && RUST_MINOR < 99) )); then
+  echo "Safe 3 project builds require stable Rust 1.99 or newer; got: $RUST_VERSION" >&2
   exit 1
 fi
 
@@ -52,12 +53,12 @@ test -f "$DISPLAY_LIBRARY"
 
 mkdir -p "$DISPLAY_BUILD_DIR" "$DISPLAY_CARGO_TARGET"
 
-git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH" "$RANDOM_PATCH"
-git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH" "$RANDOM_PATCH"
+git -C "$UPSTREAM_DIR" apply --check "$OVERLAY_PATCH" "$RANDOM_PATCH" "$RUST_PATCH"
+git -C "$UPSTREAM_DIR" apply "$OVERLAY_PATCH" "$RANDOM_PATCH" "$RUST_PATCH"
 overlay_applied=true
 cleanup() {
   if [[ "${overlay_applied:-false}" == true ]]; then
-    git -C "$UPSTREAM_DIR" apply -R "$RANDOM_PATCH" "$OVERLAY_PATCH"
+    git -C "$UPSTREAM_DIR" apply -R "$RUST_PATCH" "$RANDOM_PATCH" "$OVERLAY_PATCH"
   fi
 }
 trap cleanup EXIT

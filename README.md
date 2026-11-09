@@ -40,7 +40,7 @@ make check
 ```
 
 Keep the repositories as sibling directories. Built workers require Linux, a
-C toolchain, stable Rust 1.95 or newer, and `uv`.
+C toolchain, stable Rust 1.99 or newer, and `uv`.
 The build obtains the matching protobuf compiler through pinned
 `grpcio-tools==1.81.0` package metadata:
 
@@ -75,7 +75,7 @@ The supported configurations are:
   USB personality, and protocol stack;
 - Safe 3 is physically validated on the 240x240 ST7789 HAT with GPIO buttons,
   macOS USB enumeration, `trezorctl`, and Trezor Suite in debug mode; and
-- the unmodified upstream Safe 3 SDL/UDP emulator averages 9.85% of one Pi 4
+- the measured Core 2.12.4 Safe 3 SDL/UDP emulator averages 9.85% of one Pi 4
   core at its settled home screen, versus about 1.7% on an M-series Mac,
   because its Unix event loop wakes every millisecond; and
 - Safe 3's Linux virtual-WFI integration settles at approximately 0–0.2% of

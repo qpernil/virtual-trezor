@@ -42,14 +42,14 @@ and do not change the Trezor One artifact.
 
 | Target | Purpose |
 | --- | --- |
-| `make safe3-baseline` | Unmodified upstream SDL display/input and UDP USB emulator |
+| `make safe3-baseline` | Upstream SDL display/input and UDP USB emulator with compiler syntax compatibility |
 | `make safe3-display` | Project display driver, no SDL, inert buttons, upstream UDP USB |
 | `make safe3-input` | Display stage plus physical GPIO buttons |
 | `make safe3-usb` | Complete Pi worker with supervisor USB and virtual WFI |
 
 The complete worker requires Linux, `libjpeg-dev`, the LLVM resource headers
 matching the host compiler, the repository's pinned Python environment, and
-stable Rust 1.95 or newer:
+stable Rust 1.99 or newer:
 
 ```sh
 make init
@@ -59,10 +59,10 @@ make safe3-usb
 
 The upstream Core workspace currently uses nightly-only language and Cargo
 features. The build therefore applies the narrowly scoped
-`RUSTC_BOOTSTRAP=1` environment setting while still using stable Rust 1.95 or newer. It
+`RUSTC_BOOTSTRAP=1` environment setting while still using stable Rust 1.99 or newer. It
 records the upstream revision and Rust version beside each artifact.
 
-Two checked project overlays are applied only while a Safe 3 target builds and
+Three checked project overlays are applied only while a Safe 3 target builds and
 are always reversed afterward:
 
 - `safe3-headless-display.patch` selects the project display, button and USB
@@ -73,6 +73,9 @@ are always reversed afterward:
   paths. Entropy-use flags record completed reads; these paths share the OS
   entropy source and are not independent physical TRNGs. Reseeding APIs and
   deterministic mock generators are excluded from the worker.
+- `safe3-stable-rust.patch` adapts the experimental const-trait implementation
+  syntax to stable Rust 1.99.1, the tested compiler. It also applies to the
+  SDL baseline; it changes no runtime behavior.
 
 The pinned upstream submodule must be clean before and after every build.
 
@@ -211,8 +214,8 @@ deadline. Automatic lock, UI timers, transport timeouts, USB lifecycle, and
 button input therefore retain firmware timing semantics without a busy loop.
 Measured stable idle CPU is 0–0.2%, with no periodic one-millisecond sleeps.
 
-An exact upstream `make safe3-baseline` build was also measured on the same Pi
-4. It retained upstream SDL/UDP, used SDL's dummy video driver only because the
+An upstream `make safe3-baseline` build using Core 2.12.4 was also measured on
+the same Pi 4. It retained upstream SDL/UDP, used SDL's dummy video driver only because the
 SSH session was headless, and ran unmodified `sysevents_poll()`. After reaching
 the home screen, ten two-second `pidstat` samples averaged 9.85% of one core:
 4.50% user time and 5.35% kernel time. The identical artifact measured about

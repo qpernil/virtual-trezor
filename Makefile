@@ -3,7 +3,7 @@ USB_GADGET_SUPERVISOR_DIR ?= $(abspath ../usb-gadget-supervisor)
 
 .DEFAULT_GOAL := check
 
-.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random init \
+.PHONY: all check check-platform check-upstream check-worker-boundary check-safe3-random check-patches init \
 	init-baseline safe3-baseline safe3-display safe3-input upstream-baseline \
 	safe3-usb worker
 
@@ -14,7 +14,7 @@ init:
 
 init-baseline: init
 
-check: check-upstream check-worker-boundary check-platform check-safe3-random
+check: check-upstream check-worker-boundary check-platform check-safe3-random check-patches
 
 check-upstream:
 	./scripts/check-upstream.sh
@@ -76,6 +76,12 @@ check-worker-boundary:
 		platform/raspberry-pi/display_linux.c
 	@! grep -q 'platform_sdl\|emulator/oled.c' mk/worker-firmware.mk
 	@echo "Worker boundary replaces UDP, SDL display, and SDL buttons."
+
+check-patches:
+	git -C upstream/trezor-firmware apply --check --whitespace=error-all \
+		../../patches/safe3-headless-display.patch \
+		../../patches/safe3-secure-random.patch \
+		../../patches/safe3-stable-rust.patch
 
 check-safe3-random:
 	python3 tests/test_safe3_random.py
