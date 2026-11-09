@@ -42,10 +42,10 @@ if [[ "$RUST_VERSION" == *nightly* ]] || (( RUST_MAJOR < 1 || (RUST_MAJOR == 1 &
   exit 1
 fi
 
-RUST_PATCH="$PROJECT_ROOT/patches/safe3-stable-rust.patch"
-git -C "$UPSTREAM_DIR" apply --check "$RUST_PATCH"
-git -C "$UPSTREAM_DIR" apply "$RUST_PATCH"
-trap 'git -C "$UPSTREAM_DIR" apply -R "$RUST_PATCH"' EXIT
+RUST_COMPAT_PATCH="$PROJECT_ROOT/patches/safe3-stable-rust.patch"
+git -C "$UPSTREAM_DIR" apply --check "$RUST_COMPAT_PATCH"
+git -C "$UPSTREAM_DIR" apply "$RUST_COMPAT_PATCH"
+trap 'git -C "$UPSTREAM_DIR" apply -R "$RUST_COMPAT_PATCH"' EXIT
 
 uv sync --directory "$UPSTREAM_DIR" --locked --no-dev
 

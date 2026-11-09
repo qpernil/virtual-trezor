@@ -136,7 +136,7 @@ still expire on schedule, then suspend the USB host and confirm suspended time
 does not advance those firmware timers.
 
 For an upstream comparison, build `make safe3-baseline`, run the upstream SDL/UDP
-SDL/UDP artifact from `core/src`, and sample only after it reaches the home
+artifact from `core/src`, and sample only after it reaches the home
 screen. The validated Pi 4 run used SDL's dummy video driver in a headless SSH
 session and averaged 9.85% of one core over ten two-second `pidstat` samples
 (4.50% user, 5.35% kernel). This confirms the upstream emulator's persistent
